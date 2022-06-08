@@ -137,7 +137,7 @@
       <span class="post-author">:: vlaghe</span>
     
     
-      <span class="post-reading-time">:: 17 min read (3569 words)</span>
+      <span class="post-reading-time">:: 17 min read (3575 words)</span>
     
   </div>
 
@@ -222,7 +222,7 @@ The focus for us is the <code>__code__</code> attribute, which is a code object 
 <li>Each offset is a multiple of 2. Well why? Because, some opcodes can receive an operand such as <code>LOAD_FAST</code>, whereas <code>BINARY_ADD</code> doesn&rsquo;t. However, since of python 3.6 every instruction will get an argument so that every opcode has 2 bytes.
 <em>(There are cases in which the argument gets larger than 2 bytes and it will be split in multiple bytes, but it&rsquo;s always going to be a multiple of 2)</em></li>
 </ol>
-<p>In order to make some sense out of any bytecode, we need to understand how the Python Virtual Machine <em>(PVM)</em>* works.</p>
+<p>In order to make some sense out of any bytecode, we need to understand how the Python Virtual Machine <em>(PVM)</em> works.</p>
 <h2 id="ok-but-how-does-python-actually-uses-bytecode">Ok but how does python actually uses bytecode<a href="#ok-but-how-does-python-actually-uses-bytecode" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
 <p>The PVM is written in C and you can find it <a href="https://github.com/python/cpython">here</a>. The most important thing to understand is that CPython is a stack-oriented virtual machine. A stack&rsquo;s primary operations are load/push and store/pop. We can load/push a value on the top of an upwardly-growing stack <em>(incrementing the stack pointer)</em> and we can store/pop a value from the top of the stack <em>(decrementing the stack pointer)</em>.</p>
 <p>To better illustrate this let&rsquo;s have a look at an example. Consider the following hypothethical instructions:</p>
@@ -301,25 +301,15 @@ The focus for us is the <code>__code__</code> attribute, which is a code object 
 </span></span></code></pre></div><p>For an easier understanding let&rsquo;s ignore the &lsquo;X&rsquo; marked bytecodes and focus more on the others. So, we firstly push to the evaluation stack 2 consts from the <code>co_consts</code> list at index 2 and 3 which are our function&rsquo;s arguments <em>(values: 5, 10)</em>.</p>
 <p>After, we call the function, specifying the nr of arguments it has <em>(<code>CALL_FUNCTION 2</code>)</em>. At this point, a frame is going to be created for the <code>add</code> function which will have its own evaluation stack and block stack. Inside the add&rsquo;s evaluation stack the bytecode for our function will be executed. So we load the values at index <em>0</em> and <em>1</em> from the <code>co_varnames</code> list, which are our functions&rsquo; arguments <em>(x, y)</em>. Then we add them up, return the value and destroy the frame.</p>
 <p>To better understand this process, let&rsquo;s have a look at how these stacks behave and also at how the opcodes are actually defined within the interpreter.</p>
-<p><strong>BINARY_ADD</strong>
-load/push onto the stack the + of the two values on the top
-written <code>stack[stackp-1] = stack[stackp-1] + stack[stackp]; stackp -= 1</code>
-(turns the two values on the top of the stack into their sum)</p>
-<p><strong>LOAD_FAST N</strong>
-load/push onto the stack the value stored in co_varnames[N],
-written stackp += 1, stack[stackp] = co_varnames[N]</p>
-<p><strong>LOAD_CONST N</strong>
-pushes co_consts[N] onto the stack.</p>
-<p><strong>LOAD_NAME N</strong>
-pushes the value associated with co_names[N] onto the stack.</p>
-<p><strong>RETURN_VALUE</strong>
-returns with TOS (top of the stack) to the caller of the function.</p>
-<p><strong>CALL_FUNCTION argc</strong>
-calls a callable object with positional arguments. <code>argc</code> indicates the number of positional arguments.
-the TOS contains positional arguments, with the right-most argument on top. CALL_FUNCTION pops all arguments
-and the callable object off the stack, calls the callable object with those arguments, and pushes the
-return value returned by the callable object.</p>
-<p>( check the dis module <a href="https://docs.python.org/3/library/dis.html#python-bytecode-instructions">docs</a> for a complete definition of all the instructions)</p>
+<ul>
+<li><strong>BINARY_ADD</strong>: load/push onto the stack the + of the two values on the top written <code>stack[stackp-1] = stack[stackp-1] + stack[stackp]; stackp -= 1</code> (turns the two values on the top of the stack into their sum)</li>
+<li><strong>LOAD_FAST N</strong>: load/push onto the stack the value stored in <code>co_varnames[N]</code>, written <code>stackp += 1, stack[stackp] = co_varnames[N]</code></li>
+<li><strong>LOAD_CONST N</strong>: pushes <code>co_consts[N]</code> onto the stack.</li>
+<li><strong>LOAD_NAME N</strong>: pushes the value associated with <code>co_names[N]</code> onto the stack.</li>
+<li><strong>RETURN_VALUE</strong>: returns with TOS <em>(top of the stack)</em> to the caller of the function.</li>
+<li><strong>CALL_FUNCTION argc</strong>: calls a callable object with positional arguments. <code>argc</code> indicates the number of positional arguments. The TOS contains positional arguments, with the right-most argument on top. <code>CALL_FUNCTION</code> pops all arguments and the callable object off the stack, calls the callable object with those arguments, and pushes the return value returned by the callable object.</li>
+</ul>
+<p><em>(check the dis module <a href="https://docs.python.org/3/library/dis.html#python-bytecode-instructions">docs</a> for a complete definition of all the instructions)</em></p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>BYTECODE								Main Frame						
 </span></span><span style="display:flex;"><span>--------								----------						<span style="color:#f92672">====</span> is pop
 </span></span><span style="display:flex;"><span>																		<span style="color:#f92672">=</span>--<span style="color:#f92672">=</span> is push
@@ -352,7 +342,7 @@ return value returned by the callable object.</p>
 </span></span><span style="display:flex;"><span>									| 	.........	|
 </span></span><span style="display:flex;"><span>									|---------------|
 </span></span></code></pre></div><p>If you want to explore more about how the PVM works, how frames are created, what are the C structures behind
-the scenes, check out this talk [] and the actual source code []</p>
+the scenes, check out this <a href="">talk</a> and the actual <a href="">source code</a></p>
 <h1 id="some-fun">Some fun<a href="#some-fun" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
 <h2 id="dict-vs">dict() vs<a href="#dict-vs" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
 <p>There&rsquo;s a lot of debate on the internet about which is the more efficient way to define lists, dictionaries, etc.
@@ -424,11 +414,13 @@ if we check the exection time we see this:</p>
 </span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">20</span> RETURN_VALUE
 </span></span><span style="display:flex;"><span>&gt;&gt;&gt; 
 </span></span></code></pre></div><p>They are pretty much the same, but with a few important differences. And those are the following:</p>
-<p>LOAD_NAME  VS LOAD_GLOBAL	(offset 0)
-STORE_NAME VS STORE_FAST	(offset 10)
-LOAD_NAME  VS LOAD_FAST		(offset 12)</p>
-<p>We know that LOAD_NAME is pushing values from co_names list onto the stack, which is pretty much the same as LOAD_GLOBAL. So no big difference there. Yet, we notice that the naked program is using the global namespace to load / store variables, while the main_func program is using it&rsquo;s local namespace. Since, the global namespace is bigger than the local one, finding stuff is harder. As a result, it takes more time to execute.</p>
-<p>So START USING YOUR MAIN FUNCTION PEOPLE :D</p>
+<ul>
+<li><code>LOAD_NAME</code> VS <code>LOAD_GLOBAL</code>	<em>(offset 0 )</em></li>
+<li><code>STORE_NAME</code> VS <code>STORE_FAST</code>	<em>(offset 10)</em></li>
+<li><code>LOAD_NAME</code>  VS <code>LOAD_FAST</code>	<em>(offset 12)</em></li>
+</ul>
+<p>We know that <code>LOAD_NAME</code> is pushing values from <code>co_names</code> list onto the stack, which is pretty much the same as <code>LOAD_GLOBAL</code>. So no big difference there. Yet, we notice that the naked program is using the global namespace to load / store variables, while the <code>main_func</code> program is using it&rsquo;s local namespace. Since, the global namespace is bigger than the local one, finding stuff is harder. As a result, it takes more time to execute.</p>
+<p>So <strong>START USING YOUR MAIN FUNCTION PEOPLE :D</strong></p>
 <h2 id="injecting-the-code-object">Injecting the code object<a href="#injecting-the-code-object" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
 <p>Now that we have an idea about how code objects work, let&rsquo;s try playing around with them. Suppose we have this function:</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">func</span>():
@@ -443,7 +435,7 @@ LOAD_NAME  VS LOAD_FAST		(offset 12)</p>
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">2</span>           <span style="color:#ae81ff">0</span> LOAD_CONST               <span style="color:#ae81ff">1</span> (<span style="color:#ae81ff">3</span>)
 </span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">2</span> RETURN_VALUE
-</span></span></code></pre></div><p>So what would happen if we modify the <code>co_consts</code> tuple, will this just return ur value instead ?
+</span></span></code></pre></div><p>So what would happen if we modify the <code>co_consts</code> tuple, will this just return our value instead ?
 The answer is yes, computers are dumb they just do what they&rsquo;re told to, so in this case it would load whatever value is at index 1 in <code>co_consts</code> and return.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>In [<span style="color:#ae81ff">9</span>]: injConsts <span style="color:#f92672">=</span> (<span style="color:#66d9ef">None</span>, <span style="color:#e6db74">&#34;wut happened?&#34;</span>)
 </span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">10</span>]: code_obj <span style="color:#f92672">=</span> func<span style="color:#f92672">.</span>__code__
@@ -531,7 +523,7 @@ the all 3 variable tuples (co_varnames, co_names, co_consts):</p>
 </span></span><span style="display:flex;"><span>  co_varnames: (<span style="color:#e6db74">&#39;x&#39;</span>, <span style="color:#e6db74">&#39;y&#39;</span>, <span style="color:#e6db74">&#39;os&#39;</span>)
 </span></span><span style="display:flex;"><span>  co_names   : (<span style="color:#e6db74">&#39;os&#39;</span>, <span style="color:#e6db74">&#39;system&#39;</span>)
 </span></span><span style="display:flex;"><span>  co_consts  : (<span style="color:#66d9ef">None</span>, <span style="color:#ae81ff">0</span>, <span style="color:#e6db74">&#39;whoami&#39;</span>) 
-</span></span></code></pre></div><p>That was pretty easy, now let&rsquo;s go and construct out injected bytecode and insert it before the function&rsquo;s bytecode</p>
+</span></span></code></pre></div><p>That was pretty easy, now let&rsquo;s go and construct our injected bytecode and insert it before the function&rsquo;s bytecode</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#75715e"># inj_code = (</span>
 </span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x64&#34;,  LOAD_CONST    (0)</span>
 </span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x01&#34;,  1</span>
@@ -568,19 +560,21 @@ the all 3 variable tuples (co_varnames, co_names, co_consts):</p>
 </span></span><span style="display:flex;"><span>disas<span style="color:#f92672">.</span>py  inject<span style="color:#f92672">.</span>py  main_func<span style="color:#f92672">.</span>py  naked<span style="color:#f92672">.</span>py  notes  __pycache__
 </span></span><span style="display:flex;"><span>Out[<span style="color:#ae81ff">59</span>]: <span style="color:#ae81ff">12</span>
 </span></span></code></pre></div><p>Victory !! We achieved code execution.</p>
-<p>You can imagine how you could use this as a stealthy way to deploy stealthy backdoors, exfiltrate data, etc.
+<p>You can imagine how you could use this as a stealthy way to deploy backdoors, exfiltrate data, etc.
 The nice thing about this aproach is that your code gets executed by the current running process, without spawning a suspicios subprocess that may raise some alerts. I haven&rsquo;t tested this yet, but I think that this kind of attack
 might be more effective if a deserialization vulnerability is in place.</p>
 <p>There are some things to note though:</p>
 <ol>
-<li>This example uses a simple add function. Hence, the interaction with different attributes are minimal <em>(e.g co_names was empty in our example)</em>. Since there weren&rsquo;t many interactions with some of the variable tuples, we could easily add our own and easily change the bytecode to load from those specific indexe&rsquo;s
+<li>This example uses a simple <code>add()</code> function. Hence, the interaction with different attributes are minimal <em>(e.g co_names was empty in our example)</em>. Since there weren&rsquo;t many interactions with some of the variable tuples, we could easily add our own and change the bytecode to load from those specific indexe&rsquo;s
 <!-- raw HTML omitted --></li>
 <li>More complex functions might be harder to inject because you need to set the position of your injected variables in such a way that is compatible with the bytecode already in place. Consequently, it might not be as easy as inserting your injected code at the start, instead you will also need to modify some of the original bytecode instructions accordingly.
 <!-- raw HTML omitted --></li>
-<li>Another thing that I noticed during my explorations is that function parameters play a big role in choosing how you position your injected variables.</li>
+<li>Another thing that I noticed during my explorations is that function parameters play a big role in choosing how you position your injected variables.
+<!-- raw HTML omitted --></li>
+<li>You need access to the source code of your target</li>
 </ol>
 <p>Currently, I&rsquo;m trying to develop a way to automatically inject any piece of bytecode in any function. However, I
-ran into some problems due to the points I made above. So if there are some python guru&rsquo;s reading this, please
+ran into some problems due to the points I made above. So if there are some python gurus reading this, please
 reach out to me at <code>vlaghew@protonmail.com</code> and we might develop something beautiful. Thanks !</p>
 <h1 id="conclusion">Conclusion<a href="#conclusion" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
 <p>Since I just realized that this article got pretty lengthy I will stop here even if I wanted to aproach some other subjects such as: digging into the CPython Virtual Machine, Building an interpreter, etc. However, I might do that in separate articles. Until then, make sure to check out the awesome resources below which made the creation of this post possible and enlightened me about the unknown world of python vm. There are some great reads made by amazing people who share their knowledge, craft and experience.</p>

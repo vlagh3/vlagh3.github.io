@@ -47,8 +47,7 @@
 &lt;/ul&gt;
 &lt;h2 id=&#34;exploitation&#34;&gt;Exploitation&lt;/h2&gt;
 &lt;p&gt;&lt;img src=&#34;https://vlagh3.github.io/img/exploit_zerologon.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;Spoofing the client credential
+&lt;h3 id=&#34;1-spoofing-the-client-credential&#34;&gt;1. Spoofing the client credential&lt;/h3&gt;
 &lt;ul&gt;
 &lt;li&gt;after exchanging challenges with a &lt;code&gt;NetrServerReqChallenge&lt;/code&gt; call&lt;/li&gt;
 &lt;li&gt;a client authenticates by doing a &lt;code&gt;NetrServerAuthenticate3&lt;/code&gt; call, which has a parameter &lt;code&gt;ClientCredential&lt;/code&gt; &lt;em&gt;(that is computed by applying the &lt;code&gt;ComputeNetlogonCredential&lt;/code&gt; to the client challenge)&lt;/em&gt;&lt;/li&gt;
@@ -56,15 +55,13 @@
 &lt;li&gt;session key will be different for every authentication attempt&lt;/li&gt;
 &lt;li&gt;computer accounts are not locked after invalid login attempt =&amp;gt; we can try a bunch of times until we hit a key &amp;amp; authentication succeeds&lt;/li&gt;
 &lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;Disabling signing &amp;amp; sealing
+&lt;h3 id=&#34;2-disabling-signing--sealing&#34;&gt;2. Disabling signing &amp;amp; sealing&lt;/h3&gt;
 &lt;ul&gt;
 &lt;li&gt;ok we can bypass the auth call, but we still have no idea what the value of the session key is&lt;/li&gt;
 &lt;li&gt;it becomess problematic due to Netlogon&amp;rsquo;ss transport encryption mechanism &lt;em&gt;(RPC signing &amp;amp; sealing)&lt;/em&gt;, which uses this key but a different scheme than &lt;code&gt;ComputeNetlogonCredential&lt;/code&gt;&lt;/li&gt;
 &lt;li&gt;luckily, signing &amp;amp; sealing is optional =&amp;gt; so we can simply omit the flag in the &lt;code&gt;NetrServerAuthenticate3&lt;/code&gt; call &amp;amp; continue&lt;/li&gt;
 &lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;Spoofing a call
+&lt;h3 id=&#34;3-spoofing-a-call&#34;&gt;3. Spoofing a call&lt;/h3&gt;
 &lt;ul&gt;
 &lt;li&gt;even when encryption is disabled, every call must contain a so-called &lt;code&gt;authenticator&lt;/code&gt; value which is computed by applying &lt;code&gt;ComputeNetlogonCredential(w session key)&lt;/code&gt; to the &lt;code&gt;ClientStoredCredential + Timestamp&lt;/code&gt;
 &lt;ul&gt;
@@ -74,14 +71,10 @@
 &lt;/li&gt;
 &lt;li&gt;&lt;code&gt;ComputeNetlogonCredential(0) = 0&lt;/code&gt; =&amp;gt; we can authenticate our first call by simply providing an all-zero authenticator &amp;amp; timestamp&lt;/li&gt;
 &lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;Changing computer&amp;rsquo;s AD password
+&lt;h3 id=&#34;4-changing-computers-ad-password&#34;&gt;4. Changing computer&amp;rsquo;s AD password&lt;/h3&gt;
 &lt;ul&gt;
 &lt;li&gt;we can leverage the &lt;code&gt;NetrServerPasswordSet2&lt;/code&gt; call to set a new password for the client
-&lt;ul&gt;
-&lt;li&gt;password is not hashed but it is encrypted with the session key by using again &lt;code&gt;CFB8&lt;/code&gt; with an all-zero IV&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
+- password is not hashed but it is encrypted with the session key by using again &lt;code&gt;CFB8&lt;/code&gt; with an all-zero IV&lt;/li&gt;
 &lt;li&gt;plaintext password structure in the Netlogon protocol consists of 516 bytes &lt;em&gt;(last 4 being the pass len)&lt;/em&gt;&lt;/li&gt;
 &lt;li&gt;provide 516 zeroes =&amp;gt; decryption to 516 zeroes =&amp;gt; zero-length password &lt;em&gt;(setting empty passwords for a computer is not forbidden)&lt;/em&gt; =&amp;gt; can set an empty password for any computer in the domain&lt;/li&gt;
 &lt;li&gt;afterwards, we can simply set up a new Netlogon connection on behalf of this computer&lt;/li&gt;
@@ -89,9 +82,6 @@
 &lt;blockquote&gt;
 &lt;p&gt;&lt;strong&gt;NOTE&lt;/strong&gt;: When changing a computer password in this way it is only changed in the AD. The targeted system itself will still locally store its original password.&lt;/p&gt;
 &lt;/blockquote&gt;
-&lt;/li&gt;
-&lt;li&gt;From pass change to domain admin&lt;/li&gt;
-&lt;/ol&gt;
 &lt;h3 id=&#34;lab&#34;&gt;Lab&lt;/h3&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;Perequistes&lt;/strong&gt;

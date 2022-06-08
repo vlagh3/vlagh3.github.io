@@ -7,7 +7,7 @@
   <meta http-equiv="content-type" content="text/html; charset=utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="Changing hosts file By looking at the source code we can see gogs and api subdomains
-So I just modified the /etc/hosts to the following in order to access them.
+So I just modified the /etc/hosts to the following in order to access them:
 10.10.10.110 craft.htb gogs.craft.htb api.craft.htb Gogs page By a simple Google search we find out that Gogs is a somewhat widely used git service.
 Exploring the Craft repo we quickly find that there was an issue and a &amp;ldquo;fix&amp;rdquo; was implemented: By simply looking at the code we can easily identify where the vulnerability is." />
 <meta name="keywords" content="" />
@@ -45,7 +45,7 @@ Exploring the Craft repo we quickly find that there was an issue and a &amp;ldqu
 <meta property="og:type" content="article" />
 <meta property="og:title" content="Craft Hackthebox">
 <meta property="og:description" content="Changing hosts file By looking at the source code we can see gogs and api subdomains
-So I just modified the /etc/hosts to the following in order to access them.
+So I just modified the /etc/hosts to the following in order to access them:
 10.10.10.110 craft.htb gogs.craft.htb api.craft.htb Gogs page By a simple Google search we find out that Gogs is a somewhat widely used git service.
 Exploring the Craft repo we quickly find that there was an issue and a &amp;ldquo;fix&amp;rdquo; was implemented: By simply looking at the code we can easily identify where the vulnerability is." />
 <meta property="og:url" content="https://vlagh3.github.io/writeups/htb/craft/" />
@@ -154,7 +154,7 @@ Exploring the Craft repo we quickly find that there was an issue and a &amp;ldqu
   <div class="post-content"><div>
         <h2 id="changing-hosts-file">Changing hosts file<a href="#changing-hosts-file" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
 <p>By looking at the source code we can see gogs and api subdomains</p>
-<p>So I just modified the  /etc/hosts to the following in order to access them.</p>
+<p>So I just modified the <code>/etc/hosts</code> to the following in order to access them:</p>
 <pre tabindex="0"><code>10.10.10.110    craft.htb gogs.craft.htb api.craft.htb
 </code></pre><h2 id="gogs-page">Gogs page<a href="#gogs-page" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
 <p><img src="https://i.imgur.com/wDN37yi.png" alt=""></p>
@@ -263,8 +263,8 @@ Now what?</p>
 <p><strong>Note: Don&rsquo;t overcomplicate things, work with what you have and exhaust every possibility before moving on</strong></p>
 <p>I&rsquo;ve instantly looked at the <code>.ssh</code> folder and found the private key and therefore got user.</p>
 <h1 id="getting-root">Getting root<a href="#getting-root" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
-<p>Once I&rsquo;ve got user I immediatly went back to the new repo to have a deeper look into it, since I learned my lesson from the previous incident.</p>
-<p>After looking through almost everything, the <code>vault/secrets.sh</code> popped as the most interesting to have a look at:</p>
+<p>Once I&rsquo;ve got user I immediately went back to the new repo to have a deeper look into it, since I learned my lesson from the previous incident.</p>
+<p>After looking through almost everything, the <code>vault/secrets.sh</code> popped as the most interesting to peek at:</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e">#!/bin/bash
 </span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#75715e"># set up vault secrets backend</span>
 </span></span><span style="display:flex;"><span>vault secrets enable ssh

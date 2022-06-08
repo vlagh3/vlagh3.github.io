@@ -158,39 +158,38 @@ Enumeration Running nmap reveals 2 services:" />
 </span></span><span style="display:flex;"><span>|_http-server-header: Apache/2.4.41 <span style="color:#f92672">(</span>Ubuntu<span style="color:#f92672">)</span>
 </span></span><span style="display:flex;"><span>|_http-title: Online JSON parser
 </span></span><span style="display:flex;"><span>Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
-</span></span></code></pre></div><p>Once we check the web server, we see that we can beutify/validate JSON. Also, the validate functionality is in Beta. So let&rsquo;s check that first.
+</span></span></code></pre></div><p>Once we check the web server, we see that we can beautify/validate JSON. Also, the validate functionality is in Beta. So let&rsquo;s check that first.
 <!-- raw HTML omitted --></p>
 <p>Upon submitting <code>{&quot;test&quot;}</code> we see the following error:
 <code>Validation failed: Unhandled Java exception: com.fasterxml.jackson.databind.exc.MismatchedInputException: Unexpected token (START_OBJECT), expected START_ARRAY: need JSON Array to contain As.WRAPPER_ARRAY type information for class java.lang.Object</code></p>
 <p>So it&rsquo;s expecting an array: <code>[&quot;test&quot;]</code>.
 But that also throws an error:
 <code>Validation failed: Unhandled Java exception: com.fasterxml.jackson.databind.exc.InvalidTypeIdException: Could not resolve type id 'test' as a subtype of [simple type, class java.lang.Object]: no such class found</code></p>
-<p>Now, in both of our errors we see that they&rsquo;re thrown by a library called <em>jackson</em>, which is used to
+<p>Now, in both of our errors we see that they&rsquo;re thrown by a library called <a href="https://github.com/FasterXML/jackson">jackson</a>, which is used to
 serialize or map POJO <em>(Plain Old Java Objects)</em> to JSON and deserialize JSON to POJO. With some more searching we find a <a href="https://blog.doyensec.com/2019/07/22/jackson-gadgets.html">CVE</a> which addresses a deserialization vulnerability where an attacker could control the class to be deserialized.</p>
 <h2 id="understanding-the-cve">Understanding the CVE<a href="#understanding-the-cve" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
 <!-- raw HTML omitted -->
-<p><em><strong>What is serialization/deserialization</strong></em>
-In order to understand what deserialization vulnerabilities are and behave, we firstly need to get familiar with what serialization &amp; deserialization is. Swapneil Kumar Dash wrote a beautiful <a href="https://medium.com/@swapneildash/understanding-java-de-serialization-ee96054da15d">article</a> about this, however I will provide a short overview in this post as well.</p>
+<h3 id="what-is-serializationdeserialization">What is serialization/deserialization?<a href="#what-is-serializationdeserialization" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h3>
+<p>In order to understand what deserialization vulnerabilities are and behave, we firstly need to get familiar with what serialization &amp; deserialization is. Swapneil Kumar Dash wrote a beautiful <a href="https://medium.com/@swapneildash/understanding-java-de-serialization-ee96054da15d">article</a> about this, however I will provide a short overview in this post as well.</p>
 <blockquote>
 <p>In computing, serialization  is the process of translating a data structure or object state into a format that can be stored or transmitted and reconstructed later. Deserialization is the opposite.</p>
 </blockquote>
 <p>In our case, we translate java objects into JSON and vice-versa.</p>
-<pre><code>* What could go wrong ?
-</code></pre>
+<h3 id="what-could-go-wrong">What could go wrong?<a href="#what-could-go-wrong" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h3>
 <p>Usually, in java we can use something like this to deserialize data:</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-java" data-lang="java"><span style="display:flex;"><span><span style="color:#f92672">...</span>
 </span></span><span style="display:flex;"><span>FileInputStream fin  <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> FileInputStream<span style="color:#f92672">(</span><span style="color:#e6db74">&#34;your/file/path&#34;</span><span style="color:#f92672">);</span>
 </span></span><span style="display:flex;"><span>ObjectInputStream in <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> ObjectInputStream<span style="color:#f92672">(</span>fin<span style="color:#f92672">);</span>
 </span></span><span style="display:flex;"><span>customClassInstance  <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>CustomClass<span style="color:#f92672">)</span> in<span style="color:#f92672">.</span><span style="color:#a6e22e">readObject</span><span style="color:#f92672">();</span>
 </span></span><span style="display:flex;"><span><span style="color:#f92672">...</span>
-</span></span></code></pre></div><p>The main problem lies within the way readObject deserializes data which executes the class while also
+</span></span></code></pre></div><p>The main problem lies within the way <code>readObject()</code> deserializes data which executes the class while also
 throwing an error if we give it a serialized input of a different class.</p>
 <p>I won&rsquo;t go into much detail here on this topic, since it&rsquo;s a broad one. However, if you&rsquo;re interested in
 learning more about it you should check the resources and <a href="https://www.youtube.com/watch?v=t-zVC-CxYjw">this talk</a> by <strong>Alexei Kojenov</strong> which also made some great <a href="https://github.com/kojenov/serial">examples</a> you can play
 around with.
 <!-- raw HTML omitted --></p>
-<p><em><strong>How java gadgets work</strong></em>
-Gadgets are just a class or funcion that&rsquo;s available within the executing scope of an application. For example the following code is a simple implementation in Java:</p>
+<h3 id="how-java-gadgets-work">How java gadgets work?<a href="#how-java-gadgets-work" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h3>
+<p>Gadgets are just a class or funcion that&rsquo;s available within the executing scope of an application. For example the following code is a simple implementation in Java:</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-java" data-lang="java"><span style="display:flex;"><span><span style="color:#75715e">/* CacheManager.java */</span>
 </span></span><span style="display:flex;"><span><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">CacheManager</span> <span style="color:#66d9ef">implements</span> Serializable <span style="color:#f92672">{</span>
 </span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">private</span> <span style="color:#66d9ef">final</span> Runnable initHook<span style="color:#f92672">;</span>
@@ -214,8 +213,8 @@ Gadgets are just a class or funcion that&rsquo;s available within the executing 
 </span></span><span style="display:flex;"><span><span style="color:#f92672">}</span>
 </span></span></code></pre></div><p>Here, an attacker can inject a serialized <code>CommandTask</code> into an input stream that will be read by <code>CacheManager</code>, which in return invokes run. Therefore, he gains arbitrary command execution.
 <!-- raw HTML omitted --></p>
-<p><em><strong>Jackson library deserialization vulnerability POC</strong></em>
-The <em>CVE</em> of interest is focusing mostly on the <em>Jackson</em> library. They found that when <em>Jackson</em> deserializes a specific class (<code>ch.qos.logback.core.db.DriverManagerConnectionSource</code>), it can be abused to instantiate a Java Database Connectivity <em>(JDBC)</em>, which is used to connect &amp; interact with the dabase. To understand better let&rsquo;s break down the payload used in the <a href="https://blog.doyensec.com/2019/07/22/jackson-gadgets.html"><strong>POC</strong></a>:</p>
+<h3 id="jackson-library-deserialization-vulnerability-poc">Jackson library deserialization vulnerability POC<a href="#jackson-library-deserialization-vulnerability-poc" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h3>
+<p>The <em>CVE</em> of interest is focusing mostly on the <em>Jackson</em> library. They found that when <em>Jackson</em> deserializes a specific class (<code>ch.qos.logback.core.db.DriverManagerConnectionSource</code>), it can be abused to instantiate a Java Database Connectivity <em>(JDBC)</em>, which is used to connect &amp; interact with the dabase. To understand better let&rsquo;s break down the payload used in the <a href="https://blog.doyensec.com/2019/07/22/jackson-gadgets.html"><strong>POC</strong></a>:</p>
 <p><code>$ &quot;[\&quot;ch.qos.logback.core.db.DriverManagerConnectionSource\&quot;, {\&quot;url\&quot;:\&quot;jdbc:h2:mem:\&quot;}]&quot;</code></p>
 <p>As said previously we use the <code>DriverManagerConnectionSource</code> class to pass an url, which will trigger <a href="https://www.javadoc.io/doc/ch.qos.logback/logback-core/1.1.11/ch/qos/logback/core/db/DriverManagerConnectionSource.html#setUrl(java.lang.String)"><code>setUrl</code></a>. Afterwards, the object is serialized into a JSON object again. Consequently, the <code>getConnection()</code> <a href="https://www.javadoc.io/static/ch.qos.logback/logback-core/1.1.11/ch/qos/logback/core/db/DriverManagerConnectionSource.html#getConnection()">method</a> is called which creates an in-memory database. This is further used to create a remote connection.
 <!-- raw HTML omitted --></p>

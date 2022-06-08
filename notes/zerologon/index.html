@@ -179,8 +179,7 @@
 </ul>
 <h2 id="exploitation">Exploitation<a href="#exploitation" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
 <p><img src="/img/exploit_zerologon.png" alt=""></p>
-<ol>
-<li>Spoofing the client credential
+<h3 id="1-spoofing-the-client-credential">1. Spoofing the client credential<a href="#1-spoofing-the-client-credential" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h3>
 <ul>
 <li>after exchanging challenges with a <code>NetrServerReqChallenge</code> call</li>
 <li>a client authenticates by doing a <code>NetrServerAuthenticate3</code> call, which has a parameter <code>ClientCredential</code> <em>(that is computed by applying the <code>ComputeNetlogonCredential</code> to the client challenge)</em></li>
@@ -188,15 +187,13 @@
 <li>session key will be different for every authentication attempt</li>
 <li>computer accounts are not locked after invalid login attempt =&gt; we can try a bunch of times until we hit a key &amp; authentication succeeds</li>
 </ul>
-</li>
-<li>Disabling signing &amp; sealing
+<h3 id="2-disabling-signing--sealing">2. Disabling signing &amp; sealing<a href="#2-disabling-signing--sealing" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h3>
 <ul>
 <li>ok we can bypass the auth call, but we still have no idea what the value of the session key is</li>
 <li>it becomess problematic due to Netlogon&rsquo;ss transport encryption mechanism <em>(RPC signing &amp; sealing)</em>, which uses this key but a different scheme than <code>ComputeNetlogonCredential</code></li>
 <li>luckily, signing &amp; sealing is optional =&gt; so we can simply omit the flag in the <code>NetrServerAuthenticate3</code> call &amp; continue</li>
 </ul>
-</li>
-<li>Spoofing a call
+<h3 id="3-spoofing-a-call">3. Spoofing a call<a href="#3-spoofing-a-call" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h3>
 <ul>
 <li>even when encryption is disabled, every call must contain a so-called <code>authenticator</code> value which is computed by applying <code>ComputeNetlogonCredential(w session key)</code> to the <code>ClientStoredCredential + Timestamp</code>
 <ul>
@@ -206,14 +203,10 @@
 </li>
 <li><code>ComputeNetlogonCredential(0) = 0</code> =&gt; we can authenticate our first call by simply providing an all-zero authenticator &amp; timestamp</li>
 </ul>
-</li>
-<li>Changing computer&rsquo;s AD password
+<h3 id="4-changing-computers-ad-password">4. Changing computer&rsquo;s AD password<a href="#4-changing-computers-ad-password" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h3>
 <ul>
 <li>we can leverage the <code>NetrServerPasswordSet2</code> call to set a new password for the client
-<ul>
-<li>password is not hashed but it is encrypted with the session key by using again <code>CFB8</code> with an all-zero IV</li>
-</ul>
-</li>
+- password is not hashed but it is encrypted with the session key by using again <code>CFB8</code> with an all-zero IV</li>
 <li>plaintext password structure in the Netlogon protocol consists of 516 bytes <em>(last 4 being the pass len)</em></li>
 <li>provide 516 zeroes =&gt; decryption to 516 zeroes =&gt; zero-length password <em>(setting empty passwords for a computer is not forbidden)</em> =&gt; can set an empty password for any computer in the domain</li>
 <li>afterwards, we can simply set up a new Netlogon connection on behalf of this computer</li>
@@ -221,9 +214,6 @@
 <blockquote>
 <p><strong>NOTE</strong>: When changing a computer password in this way it is only changed in the AD. The targeted system itself will still locally store its original password.</p>
 </blockquote>
-</li>
-<li>From pass change to domain admin</li>
-</ol>
 <h3 id="lab">Lab<a href="#lab" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h3>
 <ul>
 <li><strong>Perequistes</strong>
