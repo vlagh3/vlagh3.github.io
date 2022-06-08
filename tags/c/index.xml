@@ -2,17 +2,17 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>c on Vlaghe&#39;s Blog</title>
-    <link>https://vlaghe.github.io/tags/c/</link>
+    <link>https://vlagh3.github.io/tags/c/</link>
     <description>Recent content in c on Vlaghe&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sat, 25 Apr 2020 00:00:00 +0000</lastBuildDate><atom:link href="https://vlaghe.github.io/tags/c/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Sat, 25 Apr 2020 00:00:00 +0000</lastBuildDate><atom:link href="https://vlagh3.github.io/tags/c/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>Injecting ELF files</title>
-      <link>https://vlaghe.github.io/posts/elf_inject/</link>
+      <link>https://vlagh3.github.io/posts/elf_inject/</link>
       <pubDate>Sat, 25 Apr 2020 00:00:00 +0000</pubDate>
       
-      <guid>https://vlaghe.github.io/posts/elf_inject/</guid>
+      <guid>https://vlagh3.github.io/posts/elf_inject/</guid>
       <description>Today we will continue talking about ELF files by starting to play with the headers so I’ll show you how to inject an ELF binary. This may help you get more familiar with ELF binaries and also show you the real power of it. Ok, so with all of that being said let’s dive into it. Infection Technique
 This technique it’s a relative simple one but perfect for our purpose. It consists of the following steps:</description>
       <content>&lt;p&gt;Today we will continue talking about ELF files by starting to play with the headers so I’ll show you how to inject an ELF binary. This may help you get more familiar with ELF binaries and also show you the real power of it.
@@ -250,10 +250,10 @@ Thank you for reading, and I will see you next time !&lt;/p&gt;
     
     <item>
       <title>Exploring the ELF file structure</title>
-      <link>https://vlaghe.github.io/posts/elf_struct/</link>
+      <link>https://vlagh3.github.io/posts/elf_struct/</link>
       <pubDate>Tue, 14 Apr 2020 00:00:00 +0000</pubDate>
       
-      <guid>https://vlaghe.github.io/posts/elf_struct/</guid>
+      <guid>https://vlagh3.github.io/posts/elf_struct/</guid>
       <description>Hello folks, hope you are all doing well because today we are going to talk about ELF files, but don’t be scared. Even if this topic offers a huge amount of information, I will try to make it as simple and fun as I can. With that being said, let’s talk a bit about the structure of this article. It will be split into the following parts:
 General Information The anatomy of an ELF file Missconsceptions Linking and executing ELF Header Program headers Section headers Creating your own readelf Conclusion General Information So first of all, why would you want to bother learning about a specific file format that was adopted as a system default in UNIX almost 20 years ago?</description>
       <content>&lt;p&gt;Hello folks, hope you are all doing well because today we are going to talk about ELF files, but don’t be scared. Even if this topic offers a huge amount of information, I will try to make it as simple and fun as I can. With that being said, let’s talk a bit about the structure of this article. It will be split into the following parts:&lt;/p&gt;
@@ -314,7 +314,7 @@ We will discuss more about them later. For now, let’s focus on the ELF header.
 &lt;h2 id=&#34;the-elf-header&#34;&gt;The ELF Header&lt;/h2&gt;
 &lt;p&gt;The header that is always present in both states it’s the ELF header and it’s defined as follows:&lt;/p&gt;
 
-  &lt;img src=&#34;https://vlaghe.github.io/img/struct_ehdr.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
+  &lt;img src=&#34;https://vlagh3.github.io/img/struct_ehdr.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
 
 
 &lt;p&gt;This structure is not very difficult to understand. It contains all the information for the binary within its very first bytes. Let’s quickly go through the first 6 attributes of the structure:&lt;/p&gt;
@@ -333,7 +333,7 @@ These segments contain one or more sections describing the memory layout, on the
 Since they are managing the creation of the process image, a program header becomes mandatory for executable files, but it’s optional for shared objects. That’s because a relocatable or shared object file(*.o) is meant to be linked into an executable, but not meant to be loaded into memory.&lt;/p&gt;
 &lt;p&gt;The program header structure looks like this:&lt;/p&gt;
 
-  &lt;img src=&#34;https://vlaghe.github.io/img/struct_phdr.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
+  &lt;img src=&#34;https://vlagh3.github.io/img/struct_phdr.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
 
 
 &lt;pre&gt;&lt;code&gt;P_type   : This attribute is specifying the type of the segment (e.g dynamic linking tables)
@@ -374,7 +374,7 @@ Generally a basic dynamically linked ELF executable will have 2 of these segment
 &lt;ul&gt;
 &lt;li&gt;from my local &lt;code&gt;/bin/ps&lt;/code&gt; we can find where the &lt;code&gt;PT_INTERP&lt;/code&gt; segment is located with the help of &lt;code&gt;readelf –l /bin/ps&lt;/code&gt;. After, we can use &lt;code&gt;hexdump&lt;/code&gt; with the offset retrieved earlier to see its content.
 
-  &lt;img src=&#34;https://vlaghe.github.io/img/iterp.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
+  &lt;img src=&#34;https://vlagh3.github.io/img/iterp.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
 
 &lt;/li&gt;
 &lt;li&gt;as you can see, in the example above the linker used is the ld-linux-x86-64, since our executable is 64-bit.&lt;/li&gt;
@@ -395,7 +395,7 @@ Generally a basic dynamically linked ELF executable will have 2 of these segment
 &lt;p&gt;This is possible because they are not helping to load and map any memory layout into the binary. Thus, you can strip off the sections, but the executable will be much harder to reverse/debug.
 Let’s see how the &lt;code&gt;Elf32_Shdr/Elf64_Shdr&lt;/code&gt; structure look:&lt;/p&gt;
 
-  &lt;img src=&#34;https://vlaghe.github.io/img/struct_shdr.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
+  &lt;img src=&#34;https://vlagh3.github.io/img/struct_shdr.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
 
 
 &lt;pre&gt;&lt;code&gt;Sh_name    : This member holds an offset to the name of the section. It’s value is an index into the .shstrtab (Section Header String Table).
@@ -439,18 +439,18 @@ So, I started to build my own one that is doing exactly the same thing in order 
 &lt;p&gt;Let’s start by interpreting the theory that we have learned and get a better visual representation of it.
 I wanted to make things easy, so we will take a look at the &lt;code&gt;/bin/ps&lt;/code&gt; as our experimental rat. And it’s looking like that:
 
-  &lt;img src=&#34;https://vlaghe.github.io/img/file_ps.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
+  &lt;img src=&#34;https://vlagh3.github.io/img/file_ps.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
 
 &lt;/p&gt;
 &lt;p&gt;We are dealing with a 64-bit binary, so we need to keep in mind the appropriate data types and the overall size of each structure!
 The ELF header is going to be 64 bytes long. With that knowledge, we can display the first 64 bytes with &lt;code&gt;hexdump&lt;/code&gt; and see the following:
 
-  &lt;img src=&#34;https://vlaghe.github.io/img/elf_header.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
+  &lt;img src=&#34;https://vlagh3.github.io/img/elf_header.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
 
 &lt;/p&gt;
 &lt;p&gt;If you go back and look at the &lt;code&gt;Elf64_Ehdr&lt;/code&gt; structure we can easily translate the bytes to the corresponding attributes:
 
-  &lt;img src=&#34;https://vlaghe.github.io/img/script_elf_header.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
+  &lt;img src=&#34;https://vlagh3.github.io/img/script_elf_header.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
 
 &lt;/p&gt;
 &lt;blockquote&gt;
@@ -459,12 +459,12 @@ The ELF header is going to be 64 bytes long. With that knowledge, we can display
 &lt;p&gt;What I did here was just to make some dictionaries according to the &lt;a href=&#34;https://www.cs.cmu.edu/afs/cs/academic/class/15213-f00/docs/elf.pdf&#34;&gt;ELF paper&lt;/a&gt;. Then create an &lt;code&gt;elf_header&lt;/code&gt; class that has methods for every attribute to retrieve the information based on the file that I opened. We can do this same approach for the program headers and section headers within the binary. The only difference being that there are multiple of those.
 So, if we go to the specified offset retrieved from the attribute &lt;code&gt;e_phoff&lt;/code&gt; from the elf header, we can go to the start of the program header table and match the bytes again based on the &lt;code&gt;Elf64_Phdr&lt;/code&gt; struct.
 
-  &lt;img src=&#34;https://vlaghe.github.io/img/Program_header.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
+  &lt;img src=&#34;https://vlagh3.github.io/img/Program_header.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
 
 &lt;/p&gt;
 &lt;p&gt;Last but not least, we do the same thing with the section header table.
 
-  &lt;img src=&#34;https://vlaghe.github.io/img/section_header.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
+  &lt;img src=&#34;https://vlagh3.github.io/img/section_header.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
 
 &lt;/p&gt;
 &lt;p&gt;All of the code used for my own readelf ca be found &lt;a href=&#34;https://github.com/vlagh3/interelf&#34;&gt;@ my github&lt;/a&gt;. Also, if you want to go in depth on this topic, you can have a look at the contents in the &lt;a href=&#34;https://github.com/torvalds/linux/blob/master/include/uapi/linux/elf.h&#34;&gt;elf.h&lt;/a&gt;&lt;/p&gt;
@@ -481,10 +481,10 @@ Thanks for reading and I hope you’ve got a great time !&lt;/p&gt;
     
     <item>
       <title>PE Sections</title>
-      <link>https://vlaghe.github.io/posts/pe_sections/</link>
+      <link>https://vlagh3.github.io/posts/pe_sections/</link>
       <pubDate>Fri, 20 Mar 2020 00:00:00 +0000</pubDate>
       
-      <guid>https://vlaghe.github.io/posts/pe_sections/</guid>
+      <guid>https://vlagh3.github.io/posts/pe_sections/</guid>
       <description>Last time I have introduced you to the PE file format and its structure. Today we will continue discussing about the sections and their importance. So, let’s dive directly into it !
 The Data Directory Some data structures need to be quickly located within an executable (e.g the base relocations, imports, etc). So, Windows , provides a way to find those well-known structures in a consistent manner, more explicitly into the DataDirectory attribute of the Optional Header.</description>
       <content>&lt;p&gt;Last time I have introduced you to the PE file format and its structure. Today we will continue discussing about the sections and their importance. So, let’s dive directly into it !&lt;/p&gt;
@@ -498,7 +498,7 @@ This attribute is just an array of 16 structures. Each array holds an &lt;code&g
 &lt;p&gt;So you can calculate the address ,at which each of the entries reside, with the &lt;code&gt;VirtualAddress&lt;/code&gt; element and get its size by accessing the &lt;code&gt;Size&lt;/code&gt; element. To access those elements you need to specify the correct index in the array. For example if you want to access the &lt;code&gt;Export&lt;/code&gt; table, you will need to specify the index 0, since it’s the first element in the &lt;code&gt;DataDirectory&lt;/code&gt; array.
 Below I’ll include all the entries according to Microsoft:
 
-  &lt;img src=&#34;https://vlaghe.github.io/img/Microsoft.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
+  &lt;img src=&#34;https://vlagh3.github.io/img/Microsoft.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
 
 &lt;/p&gt;
 &lt;p&gt;As you can see, a lot of these entries actually “point” to a section. But why? Why would they make this DataDirectory and not create a section with a Section Header that can provide the information needed to access it?
@@ -507,7 +507,7 @@ Well, that’s’ what I asked also, and the answer is pretty simple.&lt;/p&gt;
 &lt;p&gt;You will see that usually in the Section Header, the file size is smaller than the memory size. Some sections store data that are not necessarily needed to be stored on disk &lt;em&gt;(like the &lt;code&gt;.bss&lt;/code&gt; one)&lt;/em&gt;, and when the executable is loaded into memory, it will actually allocate &lt;em&gt;(for some sections)&lt;/em&gt; more bytes than needed, to store the sections that are useless to store on disk.
 To visualize this, I made the following schema:
 
-  &lt;img src=&#34;https://vlaghe.github.io/img/Schema.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
+  &lt;img src=&#34;https://vlagh3.github.io/img/Schema.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
 
 &lt;/p&gt;
 &lt;p&gt;To sum it up, the sections that are not needed to be on disk ,and only in memory, will be merged ,with other sections, in the extra allocated space of another section.&lt;/p&gt;

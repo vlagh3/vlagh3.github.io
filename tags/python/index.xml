@@ -2,17 +2,17 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>python on Vlaghe&#39;s Blog</title>
-    <link>https://vlaghe.github.io/tags/python/</link>
+    <link>https://vlagh3.github.io/tags/python/</link>
     <description>Recent content in python on Vlaghe&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sun, 08 Aug 2021 12:36:11 +0300</lastBuildDate><atom:link href="https://vlaghe.github.io/tags/python/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Sun, 08 Aug 2021 12:36:11 +0300</lastBuildDate><atom:link href="https://vlagh3.github.io/tags/python/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>Python internals for fun (&amp; profit?)</title>
-      <link>https://vlaghe.github.io/posts/python-vm/</link>
+      <link>https://vlagh3.github.io/posts/python-vm/</link>
       <pubDate>Sun, 08 Aug 2021 12:36:11 +0300</pubDate>
       
-      <guid>https://vlaghe.github.io/posts/python-vm/</guid>
+      <guid>https://vlagh3.github.io/posts/python-vm/</guid>
       <description>Introduction Today I want to speak about python. I recently, realized that I&amp;rsquo;ve been using python on a day-to-day basis, but never actually wondered into the magic that happens under the hood, whenever I run a python piece of code. Therefore, as a quest to fulfill my curiosity and maybe use what I learn in my advantage I started researching how python does its magic.
  DISCLAIMER: The information in this article is strictly based on my personal research and understanding of the subject which is in no way, shape or form one of a professional.</description>
       <content>&lt;h1 id=&#34;introduction&#34;&gt;Introduction&lt;/h1&gt;

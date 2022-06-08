@@ -2,17 +2,17 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>windows on Vlaghe&#39;s Blog</title>
-    <link>https://vlaghe.github.io/tags/windows/</link>
+    <link>https://vlagh3.github.io/tags/windows/</link>
     <description>Recent content in windows on Vlaghe&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Fri, 20 Mar 2020 00:00:00 +0000</lastBuildDate><atom:link href="https://vlaghe.github.io/tags/windows/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Fri, 20 Mar 2020 00:00:00 +0000</lastBuildDate><atom:link href="https://vlagh3.github.io/tags/windows/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>PE Sections</title>
-      <link>https://vlaghe.github.io/posts/pe_sections/</link>
+      <link>https://vlagh3.github.io/posts/pe_sections/</link>
       <pubDate>Fri, 20 Mar 2020 00:00:00 +0000</pubDate>
       
-      <guid>https://vlaghe.github.io/posts/pe_sections/</guid>
+      <guid>https://vlagh3.github.io/posts/pe_sections/</guid>
       <description>Last time I have introduced you to the PE file format and its structure. Today we will continue discussing about the sections and their importance. So, let’s dive directly into it !
 The Data Directory Some data structures need to be quickly located within an executable (e.g the base relocations, imports, etc). So, Windows , provides a way to find those well-known structures in a consistent manner, more explicitly into the DataDirectory attribute of the Optional Header.</description>
       <content>&lt;p&gt;Last time I have introduced you to the PE file format and its structure. Today we will continue discussing about the sections and their importance. So, let’s dive directly into it !&lt;/p&gt;
@@ -26,7 +26,7 @@ This attribute is just an array of 16 structures. Each array holds an &lt;code&g
 &lt;p&gt;So you can calculate the address ,at which each of the entries reside, with the &lt;code&gt;VirtualAddress&lt;/code&gt; element and get its size by accessing the &lt;code&gt;Size&lt;/code&gt; element. To access those elements you need to specify the correct index in the array. For example if you want to access the &lt;code&gt;Export&lt;/code&gt; table, you will need to specify the index 0, since it’s the first element in the &lt;code&gt;DataDirectory&lt;/code&gt; array.
 Below I’ll include all the entries according to Microsoft:
 
-  &lt;img src=&#34;https://vlaghe.github.io/img/Microsoft.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
+  &lt;img src=&#34;https://vlagh3.github.io/img/Microsoft.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
 
 &lt;/p&gt;
 &lt;p&gt;As you can see, a lot of these entries actually “point” to a section. But why? Why would they make this DataDirectory and not create a section with a Section Header that can provide the information needed to access it?
@@ -35,7 +35,7 @@ Well, that’s’ what I asked also, and the answer is pretty simple.&lt;/p&gt;
 &lt;p&gt;You will see that usually in the Section Header, the file size is smaller than the memory size. Some sections store data that are not necessarily needed to be stored on disk &lt;em&gt;(like the &lt;code&gt;.bss&lt;/code&gt; one)&lt;/em&gt;, and when the executable is loaded into memory, it will actually allocate &lt;em&gt;(for some sections)&lt;/em&gt; more bytes than needed, to store the sections that are useless to store on disk.
 To visualize this, I made the following schema:
 
-  &lt;img src=&#34;https://vlaghe.github.io/img/Schema.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
+  &lt;img src=&#34;https://vlagh3.github.io/img/Schema.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
 
 &lt;/p&gt;
 &lt;p&gt;To sum it up, the sections that are not needed to be on disk ,and only in memory, will be merged ,with other sections, in the extra allocated space of another section.&lt;/p&gt;

@@ -2,17 +2,17 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Writeups on Vlaghe&#39;s Blog</title>
-    <link>https://vlaghe.github.io/writeups/</link>
+    <link>https://vlagh3.github.io/writeups/</link>
     <description>Recent content in Writeups on Vlaghe&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Thu, 27 May 2021 00:00:00 +0000</lastBuildDate><atom:link href="https://vlaghe.github.io/writeups/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Thu, 27 May 2021 00:00:00 +0000</lastBuildDate><atom:link href="https://vlagh3.github.io/writeups/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>Time Hackthebox</title>
-      <link>https://vlaghe.github.io/writeups/htb/time/</link>
+      <link>https://vlagh3.github.io/writeups/htb/time/</link>
       <pubDate>Thu, 27 May 2021 00:00:00 +0000</pubDate>
       
-      <guid>https://vlaghe.github.io/writeups/htb/time/</guid>
+      <guid>https://vlagh3.github.io/writeups/htb/time/</guid>
       <description>Overview This box is a Linux one. For the initial foothold you need to exploit a bug within the Jackson library for deserializing JSON&amp;rsquo;s leading to a SSRF which can leverage a RCE. Once on the box a simple classic enumeration reveals a root bash script with read/write access. Consequenlty, just importing your pub SSH key into the authorized_keys file will grant access to root.
 Enumeration Running nmap reveals 2 services:</description>
       <content>&lt;h2 id=&#34;overview&#34;&gt;Overview&lt;/h2&gt;
@@ -151,10 +151,10 @@ In order to achieve that, the guys from &lt;a href=&#34;https://doyensec.com/&#3
     
     <item>
       <title>Obscurity Hackthebox</title>
-      <link>https://vlaghe.github.io/writeups/htb/obscurity/</link>
+      <link>https://vlagh3.github.io/writeups/htb/obscurity/</link>
       <pubDate>Wed, 10 Mar 2021 12:48:05 +0300</pubDate>
       
-      <guid>https://vlaghe.github.io/writeups/htb/obscurity/</guid>
+      <guid>https://vlagh3.github.io/writeups/htb/obscurity/</guid>
       <description>Enumeration I started with a simple nmap to get a basic overview:
 nmap -sC -sV -oA nmap/obscurity 10.10.10.168 As you can see ports 8080 (http), 22(ssh) and 9000 are open.
 Website Once on the web page we are prompted with this:
@@ -227,10 +227,10 @@ ape=&#39;&#39;&lt;/p&gt;
     
     <item>
       <title>Craft Hackthebox</title>
-      <link>https://vlaghe.github.io/writeups/htb/craft/</link>
+      <link>https://vlagh3.github.io/writeups/htb/craft/</link>
       <pubDate>Mon, 03 Feb 2020 00:00:00 +0000</pubDate>
       
-      <guid>https://vlaghe.github.io/writeups/htb/craft/</guid>
+      <guid>https://vlagh3.github.io/writeups/htb/craft/</guid>
       <description>Changing hosts file By looking at the source code we can see gogs and api subdomains
 So I just modified the /etc/hosts to the following in order to access them.
 10.10.10.110 craft.htb gogs.craft.htb api.craft.htb Gogs page By a simple Google search we find out that Gogs is a somewhat widely used git service.

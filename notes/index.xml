@@ -2,17 +2,17 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Notes on Vlaghe&#39;s Blog</title>
-    <link>https://vlaghe.github.io/notes/</link>
+    <link>https://vlagh3.github.io/notes/</link>
     <description>Recent content in Notes on Vlaghe&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Tue, 03 May 2022 00:00:00 +0000</lastBuildDate><atom:link href="https://vlaghe.github.io/notes/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Tue, 03 May 2022 00:00:00 +0000</lastBuildDate><atom:link href="https://vlagh3.github.io/notes/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>ZeroLogon</title>
-      <link>https://vlaghe.github.io/notes/zerologon/</link>
+      <link>https://vlagh3.github.io/notes/zerologon/</link>
       <pubDate>Tue, 03 May 2022 00:00:00 +0000</pubDate>
       
-      <guid>https://vlaghe.github.io/notes/zerologon/</guid>
+      <guid>https://vlagh3.github.io/notes/zerologon/</guid>
       <description>NetLogon Protocol  Overview  is an RPC interface (Windows domain controllers) used 4 user and machine authentication (e.g logging in to servers using NTLM, update password) available over TCP through a dynamic port set by the portmapper service OR through an SMB pipe on 445 it uses a customized cryptographic protocol to let a client (a domain-joined computer) and server (the domain controller) prove to each other that they both know a shared secret (i.</description>
       <content>&lt;h2 id=&#34;netlogon-protocol&#34;&gt;NetLogon Protocol&lt;/h2&gt;
 &lt;ul&gt;
@@ -26,7 +26,7 @@
 &lt;/li&gt;
 &lt;li&gt;initial auth handshake
 &lt;ul&gt;
-&lt;li&gt;&lt;img src=&#34;https://vlaghe.github.io/img/auth_handshake_zerologon.png&#34; alt=&#34;&#34;&gt;&lt;/li&gt;
+&lt;li&gt;&lt;img src=&#34;https://vlagh3.github.io/img/auth_handshake_zerologon.png&#34; alt=&#34;&#34;&gt;&lt;/li&gt;
 &lt;/ul&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
@@ -35,18 +35,18 @@
 &lt;li&gt;The cryptographic primitive both the client and server use to generate credential values is implemented in a function called &lt;code&gt;ComputeNetlogonCredential&lt;/code&gt; &lt;em&gt;(takes an 8-byte input &amp;amp; performs transformasion w the secret esssion key)&lt;/em&gt;&lt;/li&gt;
 &lt;li&gt;To acomplish this it uses the &lt;a href=&#34;https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#CFB&#34;&gt;CFB8 (8-bit cypher feedback) mode&lt;/a&gt;
 &lt;ul&gt;
-&lt;li&gt;&lt;img src=&#34;https://vlaghe.github.io/img/aes_cfb8.png&#34; alt=&#34;&#34;&gt;&lt;/li&gt;
+&lt;li&gt;&lt;img src=&#34;https://vlagh3.github.io/img/aes_cfb8.png&#34; alt=&#34;&#34;&gt;&lt;/li&gt;
 &lt;/ul&gt;
 &lt;/li&gt;
 &lt;li&gt;Instead of generating the Initialization Vector &lt;em&gt;(IV)&lt;/em&gt; randomly, the &lt;code&gt;ComputeNetlogonCredential&lt;/code&gt; function &lt;strong&gt;defines it as a fixed value which consits of 16 zero bytes&lt;/strong&gt; =&amp;gt; this violates the requirments for using AES-CFB8 securely&lt;/li&gt;
 &lt;li&gt;Ok but what could go wrong? Well: &lt;strong&gt;for 1 in 256 keys, applying AESCFB8 encryption to an all-zero plaintext will result in all-zero ciphertext&lt;/strong&gt;
 &lt;ul&gt;
-&lt;li&gt;&lt;img src=&#34;https://vlaghe.github.io/img/aes_cfb8_broken.png&#34; alt=&#34;&#34;&gt;&lt;/li&gt;
+&lt;li&gt;&lt;img src=&#34;https://vlagh3.github.io/img/aes_cfb8_broken.png&#34; alt=&#34;&#34;&gt;&lt;/li&gt;
 &lt;/ul&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
 &lt;h2 id=&#34;exploitation&#34;&gt;Exploitation&lt;/h2&gt;
-&lt;p&gt;&lt;img src=&#34;https://vlaghe.github.io/img/exploit_zerologon.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://vlagh3.github.io/img/exploit_zerologon.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;Spoofing the client credential
 &lt;ul&gt;
