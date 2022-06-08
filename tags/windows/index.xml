@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>windows on Vlaghe&#39;s Blog</title>
+    <link>https://vlaghe.github.io/tags/windows/</link>
+    <description>Recent content in windows on Vlaghe&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language>
+    <lastBuildDate>Fri, 20 Mar 2020 00:00:00 +0000</lastBuildDate><atom:link href="https://vlaghe.github.io/tags/windows/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>PE Sections</title>
+      <link>https://vlaghe.github.io/posts/pe_sections/</link>
+      <pubDate>Fri, 20 Mar 2020 00:00:00 +0000</pubDate>
+      
+      <guid>https://vlaghe.github.io/posts/pe_sections/</guid>
+      <description>Last time I have introduced you to the PE file format and its structure. Today we will continue discussing about the sections and their importance. So, let’s dive directly into it !
+The Data Directory Some data structures need to be quickly located within an executable (e.g the base relocations, imports, etc). So, Windows , provides a way to find those well-known structures in a consistent manner, more explicitly into the DataDirectory attribute of the Optional Header.</description>
+      <content>&lt;p&gt;Last time I have introduced you to the PE file format and its structure. Today we will continue discussing about the sections and their importance. So, let’s dive directly into it !&lt;/p&gt;
+&lt;h2 id=&#34;the-data-directory&#34;&gt;The Data Directory&lt;/h2&gt;
+&lt;p&gt;Some data structures need to be quickly located within an executable &lt;em&gt;(e.g the base relocations, imports, etc)&lt;/em&gt;. So, Windows , provides a way to find those well-known structures in a consistent manner, more explicitly into the &lt;code&gt;DataDirectory&lt;/code&gt; attribute of the Optional Header.
+This attribute is just an array of 16 structures. Each array holds an &lt;code&gt;IMAGE_DATA_DIRECTORY&lt;/code&gt; structure. This structure is very simple, and has just 2 elements:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;DWORD VirtualAddress &lt;em&gt;(This is actually a RVA)&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;DWORD Size &lt;em&gt;(stores the size of the pointed structure)&lt;/em&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;So you can calculate the address ,at which each of the entries reside, with the &lt;code&gt;VirtualAddress&lt;/code&gt; element and get its size by accessing the &lt;code&gt;Size&lt;/code&gt; element. To access those elements you need to specify the correct index in the array. For example if you want to access the &lt;code&gt;Export&lt;/code&gt; table, you will need to specify the index 0, since it’s the first element in the &lt;code&gt;DataDirectory&lt;/code&gt; array.
+Below I’ll include all the entries according to Microsoft:
+
+  &lt;img src=&#34;https://vlaghe.github.io/img/Microsoft.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
+
+&lt;/p&gt;
+&lt;p&gt;As you can see, a lot of these entries actually “point” to a section. But why? Why would they make this DataDirectory and not create a section with a Section Header that can provide the information needed to access it?
+Well, that’s’ what I asked also, and the answer is pretty simple.&lt;/p&gt;
+&lt;p&gt;The linker often merge 2 sections together like the &lt;code&gt;.bss&lt;/code&gt; section and the &lt;code&gt;.data&lt;/code&gt; section.  Thus, you need a way to access them.&lt;/p&gt;
+&lt;p&gt;You will see that usually in the Section Header, the file size is smaller than the memory size. Some sections store data that are not necessarily needed to be stored on disk &lt;em&gt;(like the &lt;code&gt;.bss&lt;/code&gt; one)&lt;/em&gt;, and when the executable is loaded into memory, it will actually allocate &lt;em&gt;(for some sections)&lt;/em&gt; more bytes than needed, to store the sections that are useless to store on disk.
+To visualize this, I made the following schema:
+
+  &lt;img src=&#34;https://vlaghe.github.io/img/Schema.png&#34;  alt=&#34;Hello Friend&#34;  class=&#34;center&#34;  style=&#34;border-radius: 8px;&#34;  /&gt;
+
+&lt;/p&gt;
+&lt;p&gt;To sum it up, the sections that are not needed to be on disk ,and only in memory, will be merged ,with other sections, in the extra allocated space of another section.&lt;/p&gt;
+&lt;h2 id=&#34;sections&#34;&gt;Sections&lt;/h2&gt;
+&lt;p&gt;As said earlier, the sections in a PE file are kind of jumping around, depending in which state they are &lt;em&gt;(disk, memory)&lt;/em&gt;.&lt;/p&gt;
+&lt;p&gt;Before I start describing each section, I want to specify the following. Any code or data that might be needed by either the program ,or the operating system, gets its own section. So different files can differ in what kind of sections they have. For example, those are the most typical sections for a EXE file: .text, .bss, .rdata, .data, .idata, .reloc. And for a typical OBJ file: .drectve, .debug$S, .data, .text, .debug$T .&lt;/p&gt;
+&lt;p&gt;Ok, now let’s see what kind of sections we have to deal with and what is the role of each one.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;.text&lt;/code&gt;: The default section where the actual executable code of the file is stored.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.data&lt;/code&gt;: The default read/write data section. Global variables typically go here.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.rdata&lt;/code&gt;: Read-only data, typically strings go here.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.bss&lt;/code&gt;: Stores unitialized data. Seems to be merged to .data section by the linker, with binaries I looked at.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.rsrc&lt;/code&gt;: The resources are stored in here. This section is read-only. This is a quite interesting sections ,because of course here can be loaded icons and other stuff, but you can also store embedded binaries. Also this section has structures organizating it, some kind of a filesystem.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.reloc&lt;/code&gt;: Base relocations. Relocation information is helping to modify some hardcoded addresses that assume that the code was loaded at its preffered base address in memory. Those are generally needed for DLLs and not EXEs. You can remove them when linking with /FIXED switch.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.crt&lt;/code&gt;: Data added for supporting the C++ runtime (CRT). A good example is the function pointers that are used to call the constructors and destructors of static C++ objects.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.sdata&lt;/code&gt;: “Short” read/write data that can be addressed relative to the global pointer. Used for the IA-64 and other architectures that use a global pointer register.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.didat&lt;/code&gt;: Delayload import data. Found in executables built in nonrelease mode. In release mode, the delayload data is merged into another section.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.debug&lt;/code&gt;: The .debug section is used in object files to contain compiler-generated debug information and in image files to contain all of the debug information that is generated.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.drectve&lt;/code&gt;: Contains linker directives and is only found in OBJs. Directives are ASCII strings that could be passed on the linker command line&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.edata&lt;/code&gt;: Contains information about symbols that other images can access through dynamic linking. Exported symbols are generally found in DLLs, but DLLs can also import symbols.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.idata&lt;/code&gt;: All image files that import symbols, including virtually all executable (EXE) files, have an .idata section.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.pdata&lt;/code&gt;: The exception table. Contains an array of &lt;code&gt;IMAGE_RUNTIME_FUNCTION_ENTRY&lt;/code&gt; structures, which are CPU-specific. Pointed to by the &lt;code&gt;IMAGE_DIRECTORY_ENTRY_EXCEPTION&lt;/code&gt; slot in the &lt;code&gt;DataDirectory&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.tls&lt;/code&gt;: Data for supporting thread local storage variables declared with &lt;code&gt;__declspec(thread)&lt;/code&gt;. This includes the initial value of the data, as well as additional variables needed by the runtime.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.cormeta&lt;/code&gt;: CLR metadata is stored in this section. It is used to indicate that the object file contains managed code.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.sxdata&lt;/code&gt;: The valid exception handlers of an object are listed in the .sxdata section of that object.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;That was a lot of information, I know, but it’s important to know ,at least, the important sections. Besides that, you can always use this as a reference.&lt;/p&gt;
+&lt;p&gt;In the final part we will take a look at the import table, export table and some others. Then with all this knowledge, I will show some of the most common types of exploiting the format, and hopefully after all of that , we can get into the really amazing and fun stuff.&lt;/p&gt;
+&lt;h1 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h1&gt;
+&lt;p&gt;Today we talked a little bit more about sections, and we made a high step in understanding this format even better. I really enjoy writing these articles, so I hope you enjoy reading them as much as me writing it :D. Don’t forget to check the resources and also google about this topic and the very interesting ways of taking advantage of this knowledge.&lt;/p&gt;
+&lt;h2 id=&#34;resources&#34;&gt;Resources&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.microsoft.com/en-us/windows/desktop/Debug/pe-format&#34;&gt;https://docs.microsoft.com/en-us/windows/desktop/Debug/pe-format&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://msdn.microsoft.com/en-us/library/ms809762.aspx&#34;&gt;https://msdn.microsoft.com/en-us/library/ms809762.aspx&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</content>
+    </item>
+    
+  </channel>
+</rss>

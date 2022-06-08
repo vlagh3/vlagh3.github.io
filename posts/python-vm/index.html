@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  
+    <title>Python internals for fun (&amp; profit?) :: Vlaghe&#39;s Blog</title>
+  
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="A deep dive in how python compiles &amp; executes code under the hood. On this journey, I will debunk how the python virtual machine works, common misconceptions, tips for an improved efficiency &amp; take a look @ how we can inject code or do other nasty stuff with what we&#39;ve learned" />
+<meta name="keywords" content=", " />
+<meta name="robots" content="noodp" />
+<link rel="canonical" href="https://vlaghe.github.io/posts/python-vm/" />
+
+
+
+
+<link rel="stylesheet" href="https://vlaghe.github.io/assets/style.css">
+
+  <link rel="stylesheet" href="https://vlaghe.github.io/assets/green.css">
+
+
+
+
+
+
+<link rel="apple-touch-icon" href="https://vlaghe.github.io/img/apple-touch-icon-192x192.png">
+
+  <link rel="shortcut icon" href="https://vlaghe.github.io/img/favicon/green.png">
+
+
+
+<meta name="twitter:card" content="summary" />
+
+  
+    <meta name="twitter:site" content="" />
+  
+    <meta name="twitter:creator" content="vlagh3" />
+
+
+
+<meta property="og:locale" content="en" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="Python internals for fun (&amp; profit?)">
+<meta property="og:description" content="A deep dive in how python compiles &amp; executes code under the hood. On this journey, I will debunk how the python virtual machine works, common misconceptions, tips for an improved efficiency &amp; take a look @ how we can inject code or do other nasty stuff with what we&#39;ve learned" />
+<meta property="og:url" content="https://vlaghe.github.io/posts/python-vm/" />
+<meta property="og:site_name" content="Vlaghe&#39;s Blog" />
+
+  <meta property="og:image" content="https://vlaghe.github.io/">
+
+<meta property="og:image:width" content="2048">
+<meta property="og:image:height" content="1024">
+
+
+  <meta property="article:published_time" content="2021-08-08 12:36:11 &#43;0300 EEST" />
+
+
+
+
+
+
+
+
+
+
+
+
+</head>
+<body class="green">
+
+
+<div class="container center headings--one-size">
+
+  <header class="header">
+  <div class="header__inner">
+    <div class="header__logo">
+      <a href="/">
+  <div class="logo">
+    Blog
+  </div>
+</a>
+
+    </div>
+    
+      <div class="menu-trigger">menu</div>
+    
+  </div>
+  
+    <nav class="menu">
+  <ul class="menu__inner menu__inner--desktop">
+    
+      
+        
+          <li><a href="/notes">Notes</a></li>
+        
+      
+        
+          <li><a href="/writeups">Writeups</a></li>
+        
+      
+      
+    
+
+    
+  </ul>
+
+  <ul class="menu__inner menu__inner--mobile">
+    
+      
+        <li><a href="/notes">Notes</a></li>
+      
+    
+      
+        <li><a href="/writeups">Writeups</a></li>
+      
+    
+    
+  </ul>
+</nav>
+
+  
+</header>
+
+
+  <div class="content">
+    
+<div class="post">
+  <h1 class="post-title">
+    <a href="https://vlaghe.github.io/posts/python-vm/">Python internals for fun (&amp; profit?)</a></h1>
+  <div class="post-meta">
+    
+      <span class="post-date">
+        2021-08-08
+        
+      </span>
+    
+    
+      <span class="post-author">:: vlaghe</span>
+    
+    
+      <span class="post-reading-time">:: 17 min read (3569 words)</span>
+    
+  </div>
+
+  
+  <span class="post-tags">
+    
+    #<a href="https://vlaghe.github.io/tags/python/">python</a>&nbsp;
+    
+  </span>
+  
+  
+
+
+  
+
+  <div class="post-content"><div>
+        <h1 id="introduction">Introduction<a href="#introduction" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
+<p>Today I want to speak about python. I recently, realized that I&rsquo;ve been using python on a day-to-day basis, but never actually wondered into the magic that happens under the hood, whenever I run a python piece of code. Therefore, as a quest to fulfill my curiosity and maybe use what I learn in my advantage I started researching how python
+does its magic.</p>
+<blockquote>
+<p><strong>DISCLAIMER</strong>: The information in this article is strictly based on my personal research and understanding of the subject which is in no way, shape or form one of a professional. As a result, if you notice something wrong please ping me and upon consensus I will change the flawed section</p>
+</blockquote>
+<h1 id="so-how-do-machines-work">So how do machines work?<a href="#so-how-do-machines-work" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
+<p>Very simply put, in order to create a program you write source code in a language. That, is further translated into instructions that the <em>CPU</em> can read <em>(machine code)</em>. This process is done by a compiler <em>(e.g gcc)</em>.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>						gcc prog.c -o prog		
+</span></span><span style="display:flex;"><span>		Source Code		-----compiler-----&gt;		Machine Code
+</span></span></code></pre></div><p>Think of machine code as just a series of 1&rsquo;s and 0&rsquo;s or on&rsquo;s and off&rsquo;s. What the numbers mean is up to what/who-ever is reading them, and in the processor&rsquo;s case, it takes action based on the number <em>(instruction)</em> it sees currently in the memory. Such actions might be writing a value to memory, modifying a value, jumping to another place, reading a value, etc. Different architectures have different recognizable instructions <em>(<a href="https://en.wikipedia.org/wiki/Opcode">opcodes</a>)</em> based on the processor&rsquo;s manufacturer <em>(e.g <a href="http://www.c-jump.com/CIS77/CPU/x86/lecture.html#X77_0140_encoding_add_ecx_eax">intel</a>)</em>.</p>
+<p>This construct was used since the early days of programming with languages such as: Pascal, C, C++. However, other modern programming languages <em>(e.g Java, Python)</em> use a slightly different strategy in order to make programs
+more portable across platforms. They translate the source code into bytecode, which is recognized and further executed by a &ldquo;virtual&rdquo; processor. By virtual I mean that the actual &ldquo;processor&rdquo; is just a program written in a lower-level language such as C or in the machine&rsquo;s hardware language itself. So, the same programs can run on any architecture that has the virtual machine program implemented on it which &rsquo;translates&rsquo; that code dynamically. <em>(e.g python interpretr)</em></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>																			/--&gt; Windows
+</span></span><span style="display:flex;"><span>Source code	<span style="color:#f92672">(</span>.py<span style="color:#f92672">)</span> --python compiler--&gt; Byte code <span style="color:#f92672">(</span>.pyc<span style="color:#f92672">)</span> ---PVM----&gt; Machine Code
+</span></span><span style="display:flex;"><span>																			<span style="color:#ae81ff">\-</span>-&gt; Linux
+</span></span></code></pre></div><h1 id="almighty-bytecode">Almighty bytecode<a href="#almighty-bytecode" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
+<p>As seen in the above diagram, python source code is compiled to python bytecode which is then read by the Python Virtual Machine. This bytecode is stored in <code>.pyc files</code>, which you can see within the <code>__pycache__</code>
+directory on python 3.6 or higher. Python generates this directory for efficiency, so that it doesn&rsquo;t need to compile the source code every time you execute it.</p>
+<h2 id="say-whaaaat">Say whaaaat<a href="#say-whaaaat" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<p>Consider the following program:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">maximum</span>(aList):
+</span></span><span style="display:flex;"><span>	max <span style="color:#f92672">=</span> <span style="color:#66d9ef">None</span> <span style="color:#66d9ef">if</span> len(aList) <span style="color:#f92672">==</span> <span style="color:#ae81ff">0</span> <span style="color:#66d9ef">else</span> aList[<span style="color:#ae81ff">0</span>]
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">for</span> v <span style="color:#f92672">in</span> aList[<span style="color:#ae81ff">1</span>:]:
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> max <span style="color:#f92672">&lt;</span> v:
+</span></span><span style="display:flex;"><span>			max <span style="color:#f92672">=</span> v
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> max
+</span></span></code></pre></div><p>Since this is a function object we can have a look at it&rsquo;s attributes with: <code>dir(maximum)</code>
+The focus for us is the <code>__code__</code> attribute, which is a code object and it contains everything python needs to execute the function.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">&gt;&gt;&gt;</span> maximum<span style="color:#f92672">.</span>__code__
+</span></span><span style="display:flex;"><span><span style="color:#f92672">&lt;</span>code object maximum at <span style="color:#ae81ff">0x7faad2d7f920</span>, file <span style="color:#e6db74">&#34;&lt;stdin&gt;&#34;</span>, line <span style="color:#ae81ff">1</span><span style="color:#f92672">&gt;</span>
+</span></span></code></pre></div><p>So let&rsquo;s look at the code object&rsquo;s attributes:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">&gt;&gt;&gt;</span> dir(maximum<span style="color:#f92672">.</span>__code__)
+</span></span><span style="display:flex;"><span>[<span style="color:#e6db74">&#39;__class__&#39;</span>, <span style="color:#e6db74">&#39;__delattr__&#39;</span>, <span style="color:#e6db74">&#39;__dir__&#39;</span>, <span style="color:#e6db74">&#39;__doc__&#39;</span>, <span style="color:#e6db74">&#39;__eq__&#39;</span>, <span style="color:#e6db74">&#39;__format__&#39;</span>, <span style="color:#e6db74">&#39;__ge__&#39;</span>, <span style="color:#e6db74">&#39;__getattribute__&#39;</span>, <span style="color:#e6db74">&#39;__gt__&#39;</span>, <span style="color:#e6db74">&#39;__hash__&#39;</span>, <span style="color:#e6db74">&#39;__init__&#39;</span>, <span style="color:#e6db74">&#39;__init_subclass__&#39;</span>, <span style="color:#e6db74">&#39;__le__&#39;</span>, <span style="color:#e6db74">&#39;__lt__&#39;</span>, <span style="color:#e6db74">&#39;__ne__&#39;</span>, <span style="color:#e6db74">&#39;__new__&#39;</span>, <span style="color:#e6db74">&#39;__reduce__&#39;</span>, <span style="color:#e6db74">&#39;__reduce_ex__&#39;</span>, <span style="color:#e6db74">&#39;__repr__&#39;</span>, <span style="color:#e6db74">&#39;__setattr__&#39;</span>, <span style="color:#e6db74">&#39;__sizeof__&#39;</span>, <span style="color:#e6db74">&#39;__str__&#39;</span>, <span style="color:#e6db74">&#39;__subclasshook__&#39;</span>, <span style="color:#e6db74">&#39;co_argcount&#39;</span>, <span style="color:#e6db74">&#39;co_cellvars&#39;</span>, <span style="color:#e6db74">&#39;co_code&#39;</span>, <span style="color:#e6db74">&#39;co_consts&#39;</span>, <span style="color:#e6db74">&#39;co_filename&#39;</span>, <span style="color:#e6db74">&#39;co_firstlineno&#39;</span>, <span style="color:#e6db74">&#39;co_flags&#39;</span>, <span style="color:#e6db74">&#39;co_freevars&#39;</span>, <span style="color:#e6db74">&#39;co_kwonlyargcount&#39;</span>, <span style="color:#e6db74">&#39;co_lnotab&#39;</span>, <span style="color:#e6db74">&#39;co_name&#39;</span>, <span style="color:#e6db74">&#39;co_names&#39;</span>, <span style="color:#e6db74">&#39;co_nlocals&#39;</span>, <span style="color:#e6db74">&#39;co_posonlyargcount&#39;</span>, <span style="color:#e6db74">&#39;co_stacksize&#39;</span>, <span style="color:#e6db74">&#39;co_varnames&#39;</span>, <span style="color:#e6db74">&#39;replace&#39;</span>]
+</span></span></code></pre></div><p>For the purposes of this article I will focus mainly on just a few of these:</p>
+<ul>
+<li><code>co_varnames</code>	&ndash;	its local var names including parameters</li>
+<li><code>co_names</code>	&ndash;	its global var names</li>
+<li><code>co_consts</code>	&ndash;	its constants</li>
+<li><code>co_code</code>		&ndash;	the actual bytecode</li>
+</ul>
+<p>So for our example this would yeld:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>(<span style="color:#e6db74">&#39;aList&#39;</span>, <span style="color:#e6db74">&#39;max&#39;</span>, <span style="color:#e6db74">&#39;v&#39;</span>)
+</span></span><span style="display:flex;"><span>(<span style="color:#e6db74">&#39;len&#39;</span>,)
+</span></span><span style="display:flex;"><span>(<span style="color:#66d9ef">None</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">1</span>)
+</span></span><span style="display:flex;"><span><span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;t</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">|</span><span style="color:#ae81ff">\x00\x83\x01</span><span style="color:#e6db74">d</span><span style="color:#ae81ff">\x01</span><span style="color:#e6db74">k</span><span style="color:#ae81ff">\x02</span><span style="color:#e6db74">r</span><span style="color:#ae81ff">\x10</span><span style="color:#e6db74">d</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">n</span><span style="color:#ae81ff">\x06</span><span style="color:#e6db74">|</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">d</span><span style="color:#ae81ff">\x01\x19\x00</span><span style="color:#e6db74">}</span><span style="color:#ae81ff">\x01</span><span style="color:#e6db74">|</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">d</span><span style="color:#ae81ff">\x02</span><span style="color:#e6db74">d</span><span style="color:#ae81ff">\x00\x85\x02\x19\x00</span><span style="color:#e6db74">D</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">]</span><span style="color:#ae81ff">\x10</span><span style="color:#e6db74">}</span><span style="color:#ae81ff">\x02</span><span style="color:#e6db74">|</span><span style="color:#ae81ff">\x01</span><span style="color:#e6db74">|</span><span style="color:#ae81ff">\x02</span><span style="color:#e6db74">k</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">r$|</span><span style="color:#ae81ff">\x02</span><span style="color:#e6db74">}</span><span style="color:#ae81ff">\x01</span><span style="color:#e6db74">q$|</span><span style="color:#ae81ff">\x01</span><span style="color:#e6db74">S</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">&#39;</span>
+</span></span></code></pre></div><p>In order to make sense out of that bytes object we firstly need to get decimal value of the bytecode, you can do that in python with the <code>ord()</code> function:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">&gt;&gt;&gt;</span> ord(<span style="color:#e6db74">&#39;t&#39;</span>)
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">116</span>
+</span></span></code></pre></div><p>Ok, now we know that <em>t</em> is decimal 116, but that didn&rsquo;t help much. Luckily, there exist a module called <code>dis</code> which makes things easier. For example we could use the <code>dis.opname</code> which is a list that contains all the python bytecodes in a human-readeable format.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">&gt;&gt;&gt;</span> dis<span style="color:#f92672">.</span>opname[<span style="color:#ae81ff">116</span>]
+</span></span><span style="display:flex;"><span><span style="color:#e6db74">&#39;LOAD_GLOBAL&#39;</span>
+</span></span></code></pre></div><p>You wouldn&rsquo;t want to do that every time so the <code>dis</code> module has a convenient way to show the bytecode with <code>dis.dis</code>:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">&gt;&gt;&gt;</span> dis<span style="color:#f92672">.</span>dis(add)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>SOURCE CODE	 BYTECODE OFFSET		INDEX IN co_varnames
+</span></span><span style="display:flex;"><span>LINE NUMBER	 <span style="color:#f92672">&amp;</span> INSTRUCTION			LIST <span style="color:#f92672">&amp;</span> IT<span style="color:#e6db74">&#39;S VALUE</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">2</span>           <span style="color:#ae81ff">0</span> LOAD_FAST                <span style="color:#ae81ff">0</span> (x)
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">2</span> LOAD_FAST                <span style="color:#ae81ff">1</span> (y)
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">4</span> BINARY_ADD
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">6</span> RETURN_VALUE
+</span></span></code></pre></div><p>Some things to note here:</p>
+<ol>
+<li>We can observe that each line of source code generates multiple lines of bytecode</li>
+<li>Each offset is a multiple of 2. Well why? Because, some opcodes can receive an operand such as <code>LOAD_FAST</code>, whereas <code>BINARY_ADD</code> doesn&rsquo;t. However, since of python 3.6 every instruction will get an argument so that every opcode has 2 bytes.
+<em>(There are cases in which the argument gets larger than 2 bytes and it will be split in multiple bytes, but it&rsquo;s always going to be a multiple of 2)</em></li>
+</ol>
+<p>In order to make some sense out of any bytecode, we need to understand how the Python Virtual Machine <em>(PVM)</em>* works.</p>
+<h2 id="ok-but-how-does-python-actually-uses-bytecode">Ok but how does python actually uses bytecode<a href="#ok-but-how-does-python-actually-uses-bytecode" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<p>The PVM is written in C and you can find it <a href="https://github.com/python/cpython">here</a>. The most important thing to understand is that CPython is a stack-oriented virtual machine. A stack&rsquo;s primary operations are load/push and store/pop. We can load/push a value on the top of an upwardly-growing stack <em>(incrementing the stack pointer)</em> and we can store/pop a value from the top of the stack <em>(decrementing the stack pointer)</em>.</p>
+<p>To better illustrate this let&rsquo;s have a look at an example. Consider the following hypothethical instructions:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span>load <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>load <span style="color:#ae81ff">2</span>
+</span></span><span style="display:flex;"><span>add
+</span></span><span style="display:flex;"><span>load <span style="color:#ae81ff">3</span>
+</span></span><span style="display:flex;"><span>divide
+</span></span></code></pre></div><p>Let&rsquo;s see how the stack behaves when each instruction is executed</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>				 load 1		 load 2		   add		 load 3		 divide
+</span></span><span style="display:flex;"><span>  |-------|		|-------|	|-------|	|-------|	|-------|	|-------|
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">2</span> |		  |		|		|	|		|	|		|	|		|	|		|
+</span></span><span style="display:flex;"><span>  |-------|		|-------|	|-------|	|-------|	|-------|	|-------|
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">1</span> |		  |		|		|	|	2	|	|		|	|	3	|	|		|
+</span></span><span style="display:flex;"><span>  |-------|		|-------|	|-------|	|-------|	|-------|	|-------|
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">0</span> |		  |		|	1	|	|	1	|	|	3	|	|	3	|	|	1	|
+</span></span><span style="display:flex;"><span>  |-------|		|-------|	|-------|	|-------|	|-------|	|-------|
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>stackp <span style="color:#f92672">=</span> -1		stackp<span style="color:#f92672">=</span>0	stackp<span style="color:#f92672">=</span>1	stackp<span style="color:#f92672">=</span>0	stackp<span style="color:#f92672">=</span>1	stackp<span style="color:#f92672">=</span><span style="color:#ae81ff">0</span>
+</span></span></code></pre></div><p>Now, Python&rsquo;s stack machine is a little bit more complicated than this hypothetical stack we created. In python:</p>
+<ul>
+<li>The objects are always stored in the heap. It&rsquo;s only the pointer to the object that is stored in the stack. For example let&rsquo;s say we want to load 2 integers onto the stack:</li>
+</ul>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>	   stack			  heap
+</span></span><span style="display:flex;"><span>	| ------- |       | -------- |
+</span></span><span style="display:flex;"><span>	| ------- | ----- | -------- |
+</span></span><span style="display:flex;"><span>	|         |       |          |
+</span></span><span style="display:flex;"><span>	| ------- |       | -------- |
+</span></span><span style="display:flex;"><span>	| addr b  | ----&gt; | val of b |
+</span></span><span style="display:flex;"><span>	| ------- |       | -------- |
+</span></span><span style="display:flex;"><span>	| addr a  | ----&gt; | val of a |
+</span></span><span style="display:flex;"><span>	| ------- |       | -------- |
+</span></span></code></pre></div><ul>
+<li>
+<p>The call stack is the main structure of running a python program. It has one attribute <em>(a frame)</em> &ndash; for each currently active function call. Every function call pushes a new frame onto the call stack and every time a call returns, its frame is popped off.</p>
+</li>
+<li>
+<p>In each frame there are 2 stacks:</p>
+<ol>
+<li><strong>the evaluation stack</strong> &ndash; where execution of a function&rsquo;s instructions occurs</li>
+<li><strong>the block stack</strong> &ndash; used by python to keep track of certain types of control structures such as: loops, try/excepts blocks, with blocks. This helps python to know which blocks are active at any given moment and take action accordingly. For example, if we use the <code>break</code> statement, the interpreter needs to know which loop to break, and that&rsquo;s done with the use of the block stack.</li>
+</ol>
+</li>
+</ul>
+<p>Suppose we have the following program:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">add</span>(x, y):
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> x<span style="color:#f92672">+</span>y
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>add(<span style="color:#ae81ff">2</span>,<span style="color:#ae81ff">3</span>)
+</span></span></code></pre></div><p>So our dissasembled bytecode will look like this:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>co_consts   :   (<span style="color:#f92672">&lt;</span>code object add at <span style="color:#ae81ff">0x7fbce771ec90</span>, file <span style="color:#e6db74">&#34;ex.py&#34;</span>, line <span style="color:#ae81ff">1</span><span style="color:#f92672">&gt;</span>, <span style="color:#e6db74">&#39;add&#39;</span>, <span style="color:#ae81ff">5</span>, <span style="color:#ae81ff">10</span>, <span style="color:#66d9ef">None</span>)
+</span></span><span style="display:flex;"><span>co_names    :   (<span style="color:#e6db74">&#39;add&#39;</span>,)
+</span></span><span style="display:flex;"><span>co_varnames :   ()
+</span></span><span style="display:flex;"><span>co_code     :   <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;d</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">d</span><span style="color:#ae81ff">\x01\x84\x00</span><span style="color:#e6db74">Z</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">e</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">d</span><span style="color:#ae81ff">\x02</span><span style="color:#e6db74">d</span><span style="color:#ae81ff">\x03\x83\x02\x01\x00</span><span style="color:#e6db74">d</span><span style="color:#ae81ff">\x04</span><span style="color:#e6db74">S</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">&#39;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>BYTECODE
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">1</span>         X <span style="color:#ae81ff">0</span> LOAD_CONST               <span style="color:#ae81ff">0</span> (<span style="color:#f92672">&lt;</span>code object add at <span style="color:#ae81ff">0x7fbce771ec90</span>, file <span style="color:#e6db74">&#34;ex.py&#34;</span>, line <span style="color:#ae81ff">1</span><span style="color:#f92672">&gt;</span>)
+</span></span><span style="display:flex;"><span>            X <span style="color:#ae81ff">2</span> LOAD_CONST               <span style="color:#ae81ff">1</span> (<span style="color:#e6db74">&#39;add&#39;</span>)
+</span></span><span style="display:flex;"><span>            X <span style="color:#ae81ff">4</span> MAKE_FUNCTION            <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span>            X <span style="color:#ae81ff">6</span> STORE_NAME               <span style="color:#ae81ff">0</span> (add)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">4</span>         X <span style="color:#ae81ff">8</span> LOAD_NAME                <span style="color:#ae81ff">0</span> (add)
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">10</span> LOAD_CONST              <span style="color:#ae81ff">2</span> (<span style="color:#ae81ff">5</span>)
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">12</span> LOAD_CONST              <span style="color:#ae81ff">3</span> (<span style="color:#ae81ff">10</span>)
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">14</span> CALL_FUNCTION           <span style="color:#ae81ff">2</span>
+</span></span><span style="display:flex;"><span>            X <span style="color:#ae81ff">16</span> POP_TOP
+</span></span><span style="display:flex;"><span>            X <span style="color:#ae81ff">18</span> LOAD_CONST              <span style="color:#ae81ff">4</span> (<span style="color:#66d9ef">None</span>)
+</span></span><span style="display:flex;"><span>            X <span style="color:#ae81ff">20</span> RETURN_VALUE
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>Disassembly of <span style="color:#f92672">&lt;</span>code object add at <span style="color:#ae81ff">0x7fbce771ec90</span>, file <span style="color:#e6db74">&#34;ex.py&#34;</span>, line <span style="color:#ae81ff">1</span><span style="color:#f92672">&gt;</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">2</span>           <span style="color:#ae81ff">0</span> LOAD_FAST                <span style="color:#ae81ff">0</span> (x)
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">2</span> LOAD_FAST                <span style="color:#ae81ff">1</span> (y)
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">4</span> BINARY_ADD
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">6</span> RETURN_VALUE
+</span></span></code></pre></div><p>For an easier understanding let&rsquo;s ignore the &lsquo;X&rsquo; marked bytecodes and focus more on the others. So, we firstly push to the evaluation stack 2 consts from the <code>co_consts</code> list at index 2 and 3 which are our function&rsquo;s arguments <em>(values: 5, 10)</em>.</p>
+<p>After, we call the function, specifying the nr of arguments it has <em>(<code>CALL_FUNCTION 2</code>)</em>. At this point, a frame is going to be created for the <code>add</code> function which will have its own evaluation stack and block stack. Inside the add&rsquo;s evaluation stack the bytecode for our function will be executed. So we load the values at index <em>0</em> and <em>1</em> from the <code>co_varnames</code> list, which are our functions&rsquo; arguments <em>(x, y)</em>. Then we add them up, return the value and destroy the frame.</p>
+<p>To better understand this process, let&rsquo;s have a look at how these stacks behave and also at how the opcodes are actually defined within the interpreter.</p>
+<p><strong>BINARY_ADD</strong>
+load/push onto the stack the + of the two values on the top
+written <code>stack[stackp-1] = stack[stackp-1] + stack[stackp]; stackp -= 1</code>
+(turns the two values on the top of the stack into their sum)</p>
+<p><strong>LOAD_FAST N</strong>
+load/push onto the stack the value stored in co_varnames[N],
+written stackp += 1, stack[stackp] = co_varnames[N]</p>
+<p><strong>LOAD_CONST N</strong>
+pushes co_consts[N] onto the stack.</p>
+<p><strong>LOAD_NAME N</strong>
+pushes the value associated with co_names[N] onto the stack.</p>
+<p><strong>RETURN_VALUE</strong>
+returns with TOS (top of the stack) to the caller of the function.</p>
+<p><strong>CALL_FUNCTION argc</strong>
+calls a callable object with positional arguments. <code>argc</code> indicates the number of positional arguments.
+the TOS contains positional arguments, with the right-most argument on top. CALL_FUNCTION pops all arguments
+and the callable object off the stack, calls the callable object with those arguments, and pushes the
+return value returned by the callable object.</p>
+<p>( check the dis module <a href="https://docs.python.org/3/library/dis.html#python-bytecode-instructions">docs</a> for a complete definition of all the instructions)</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>BYTECODE								Main Frame						
+</span></span><span style="display:flex;"><span>--------								----------						<span style="color:#f92672">====</span> is pop
+</span></span><span style="display:flex;"><span>																		<span style="color:#f92672">=</span>--<span style="color:#f92672">=</span> is push
+</span></span><span style="display:flex;"><span>									 evaluation stack
+</span></span><span style="display:flex;"><span>LOAD_NAME 		<span style="color:#ae81ff">0</span> <span style="color:#f92672">(</span>add<span style="color:#f92672">)</span>	<span style="color:#f92672">=</span>----|		|---------------|
+</span></span><span style="display:flex;"><span>LOAD_CONST 		<span style="color:#ae81ff">2</span> <span style="color:#f92672">(</span>5<span style="color:#f92672">)</span>	<span style="color:#f92672">=</span>----|---<span style="color:#f92672">=</span>&gt;	| 10			| <span style="color:#f92672">=====</span>&gt;
+</span></span><span style="display:flex;"><span>LOAD_CONST		<span style="color:#ae81ff">3</span> <span style="color:#f92672">(</span>10<span style="color:#f92672">)</span>	<span style="color:#f92672">=</span>----|---<span style="color:#f92672">=</span>&gt;	|  5			| <span style="color:#f92672">=====</span>&gt;
+</span></span><span style="display:flex;"><span>CALL_FUNCTION	<span style="color:#ae81ff">2</span> 			 |---<span style="color:#f92672">=</span>&gt;	| &lt;add func&gt; 	| <span style="color:#f92672">=====</span>&gt;
+</span></span><span style="display:flex;"><span>									| 15	  &lt;-----|--------|
+</span></span><span style="display:flex;"><span>									|---------------|		 |
+</span></span><span style="display:flex;"><span>	|								|  block stack	|		 |
+</span></span><span style="display:flex;"><span>	|								|---------------|		 |
+</span></span><span style="display:flex;"><span>	|								|	.........	|		 |
+</span></span><span style="display:flex;"><span>	|								|---------------|		 |
+</span></span><span style="display:flex;"><span>	V														 | returns 
+</span></span><span style="display:flex;"><span>															 |	 the
+</span></span><span style="display:flex;"><span>LOAD_FAST	<span style="color:#ae81ff">0</span> <span style="color:#f92672">(</span>x<span style="color:#f92672">)</span>	<span style="color:#f92672">=</span>-------|								 | 	   value
+</span></span><span style="display:flex;"><span>LOAD_FAST	<span style="color:#ae81ff">1</span> <span style="color:#f92672">(</span>y<span style="color:#f92672">)</span>	<span style="color:#f92672">=</span>---|	|			add Frame			 |
+</span></span><span style="display:flex;"><span>BINARY_ADD				|	|			---------			 |
+</span></span><span style="display:flex;"><span>RETURN_VALUE			|	|								 |
+</span></span><span style="display:flex;"><span>						|	|		 evaluation stack		 |
+</span></span><span style="display:flex;"><span>						|	|		|---------------|		 |
+</span></span><span style="display:flex;"><span>						|---|----<span style="color:#f92672">=</span>&gt;	| val of y <span style="color:#f92672">(</span>5<span style="color:#f92672">)</span>	| <span style="color:#f92672">===</span>&gt;	 |
+</span></span><span style="display:flex;"><span>							|----<span style="color:#f92672">=</span>&gt;	| val of x <span style="color:#f92672">(</span>10<span style="color:#f92672">)</span>	| <span style="color:#f92672">===</span>&gt;	 |
+</span></span><span style="display:flex;"><span>									| 15	  ------|--------|
+</span></span><span style="display:flex;"><span>									| 				|
+</span></span><span style="display:flex;"><span>									|---------------|
+</span></span><span style="display:flex;"><span>									|  block stack	|
+</span></span><span style="display:flex;"><span>									|---------------|
+</span></span><span style="display:flex;"><span>									| 	.........	|
+</span></span><span style="display:flex;"><span>									|---------------|
+</span></span></code></pre></div><p>If you want to explore more about how the PVM works, how frames are created, what are the C structures behind
+the scenes, check out this talk [] and the actual source code []</p>
+<h1 id="some-fun">Some fun<a href="#some-fun" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
+<h2 id="dict-vs">dict() vs<a href="#dict-vs" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<p>There&rsquo;s a lot of debate on the internet about which is the more efficient way to define lists, dictionaries, etc.
+From my point of view, I think one should understand that python is not a language created to run fast code
+so if you need to develop complex software that runs fast do it in a lower language such as C/C++. However,
+for the sake of the argument and to also explore more about how python behaves let&rsquo;s have a look at the bytecode:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">&gt;&gt;&gt;</span> dis<span style="color:#f92672">.</span>dis(<span style="color:#e6db74">&#34;</span><span style="color:#e6db74">{}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">1</span>           <span style="color:#ae81ff">0</span> BUILD_MAP                <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">2</span> RETURN_VALUE
+</span></span><span style="display:flex;"><span><span style="color:#f92672">&gt;&gt;&gt;</span> dis<span style="color:#f92672">.</span>dis(<span style="color:#e6db74">&#34;dict()&#34;</span>)
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">1</span>           <span style="color:#ae81ff">0</span> LOAD_NAME                <span style="color:#ae81ff">0</span> (dict)
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">2</span> CALL_FUNCTION            <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">4</span> RETURN_VALUE
+</span></span></code></pre></div><p>We can easily see that the first option is more efficient, since it doesn&rsquo;t call any function, thus it doesn&rsquo;t
+need to push another frame onto the call stack.</p>
+<h2 id="should-we-use-a-main-function-or-not">Should we use a main function or not?<a href="#should-we-use-a-main-function-or-not" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<p>I built 2 simple programs to test this:</p>
+<p>naked.py</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">for</span> i <span style="color:#f92672">in</span> range(<span style="color:#ae81ff">2</span><span style="color:#f92672">**</span><span style="color:#ae81ff">26</span>):
+</span></span><span style="display:flex;"><span>	i
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>main_func<span style="color:#f92672">.</span>py
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">main</span>():
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">for</span> i <span style="color:#f92672">in</span> range(<span style="color:#ae81ff">2</span><span style="color:#f92672">**</span><span style="color:#ae81ff">26</span>):
+</span></span><span style="display:flex;"><span>		i
+</span></span><span style="display:flex;"><span>main()
+</span></span></code></pre></div><p>Most of us would assume that the second program would take longer to execute, however
+if we check the exection time we see this:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>main_func.py
+</span></span><span style="display:flex;"><span>________________________________________________________
+</span></span><span style="display:flex;"><span>Executed in    1.32 secs   fish           external 
+</span></span><span style="display:flex;"><span>   usr time  1312.34 millis  1300.00 micros  1311.04 millis 
+</span></span><span style="display:flex;"><span>   sys time   10.10 millis  159.00 micros    9.94 millis 
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>naked.py
+</span></span><span style="display:flex;"><span>________________________________________________________
+</span></span><span style="display:flex;"><span>Executed in    2.39 secs   fish           external 
+</span></span><span style="display:flex;"><span>   usr time    2.38 secs  365.00 micros    2.38 secs 
+</span></span><span style="display:flex;"><span>   sys time    0.01 secs   45.00 micros    0.01 secs 
+</span></span></code></pre></div><p>So why is that? Well we should explore the bytecode:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>&gt;&gt;&gt; naked <span style="color:#f92672">=</span> open<span style="color:#f92672">(</span><span style="color:#e6db74">&#34;naked.py&#34;</span><span style="color:#f92672">)</span>.read<span style="color:#f92672">()</span>
+</span></span><span style="display:flex;"><span>&gt;&gt;&gt; dis.dis<span style="color:#f92672">(</span>naked<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">1</span>           <span style="color:#ae81ff">0</span> LOAD_NAME                <span style="color:#ae81ff">0</span> <span style="color:#f92672">(</span>range<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">2</span> LOAD_CONST               <span style="color:#ae81ff">0</span> <span style="color:#f92672">(</span>67108864<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">4</span> CALL_FUNCTION            <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">6</span> GET_ITER
+</span></span><span style="display:flex;"><span>        &gt;&gt;    <span style="color:#ae81ff">8</span> FOR_ITER                 <span style="color:#ae81ff">8</span> <span style="color:#f92672">(</span>to 18<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">10</span> STORE_NAME               <span style="color:#ae81ff">1</span> <span style="color:#f92672">(</span>i<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">2</span>          <span style="color:#ae81ff">12</span> LOAD_NAME                <span style="color:#ae81ff">1</span> <span style="color:#f92672">(</span>i<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">14</span> POP_TOP
+</span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">16</span> JUMP_ABSOLUTE            <span style="color:#ae81ff">8</span>
+</span></span><span style="display:flex;"><span>        &gt;&gt;   <span style="color:#ae81ff">18</span> LOAD_CONST               <span style="color:#ae81ff">1</span> <span style="color:#f92672">(</span>None<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">20</span> RETURN_VALUE
+</span></span><span style="display:flex;"><span>&gt;&gt;&gt; from main_func import main
+</span></span><span style="display:flex;"><span>&gt;&gt;&gt; dis.dis<span style="color:#f92672">(</span>main<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">3</span>           <span style="color:#ae81ff">0</span> LOAD_GLOBAL              <span style="color:#ae81ff">0</span> <span style="color:#f92672">(</span>range<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">2</span> LOAD_CONST               <span style="color:#ae81ff">1</span> <span style="color:#f92672">(</span>67108864<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">4</span> CALL_FUNCTION            <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">6</span> GET_ITER
+</span></span><span style="display:flex;"><span>        &gt;&gt;    <span style="color:#ae81ff">8</span> FOR_ITER                 <span style="color:#ae81ff">8</span> <span style="color:#f92672">(</span>to 18<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">10</span> STORE_FAST               <span style="color:#ae81ff">0</span> <span style="color:#f92672">(</span>i<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">4</span>          <span style="color:#ae81ff">12</span> LOAD_FAST                <span style="color:#ae81ff">0</span> <span style="color:#f92672">(</span>i<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">14</span> POP_TOP
+</span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">16</span> JUMP_ABSOLUTE            <span style="color:#ae81ff">8</span>
+</span></span><span style="display:flex;"><span>        &gt;&gt;   <span style="color:#ae81ff">18</span> LOAD_CONST               <span style="color:#ae81ff">0</span> <span style="color:#f92672">(</span>None<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">20</span> RETURN_VALUE
+</span></span><span style="display:flex;"><span>&gt;&gt;&gt; 
+</span></span></code></pre></div><p>They are pretty much the same, but with a few important differences. And those are the following:</p>
+<p>LOAD_NAME  VS LOAD_GLOBAL	(offset 0)
+STORE_NAME VS STORE_FAST	(offset 10)
+LOAD_NAME  VS LOAD_FAST		(offset 12)</p>
+<p>We know that LOAD_NAME is pushing values from co_names list onto the stack, which is pretty much the same as LOAD_GLOBAL. So no big difference there. Yet, we notice that the naked program is using the global namespace to load / store variables, while the main_func program is using it&rsquo;s local namespace. Since, the global namespace is bigger than the local one, finding stuff is harder. As a result, it takes more time to execute.</p>
+<p>So START USING YOUR MAIN FUNCTION PEOPLE :D</p>
+<h2 id="injecting-the-code-object">Injecting the code object<a href="#injecting-the-code-object" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<p>Now that we have an idea about how code objects work, let&rsquo;s try playing around with them. Suppose we have this function:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">func</span>():
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> <span style="color:#ae81ff">3</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>func
+</span></span><span style="display:flex;"><span>  co_varnames: ()
+</span></span><span style="display:flex;"><span>  co_names   : ()
+</span></span><span style="display:flex;"><span>  co_consts  : (<span style="color:#66d9ef">None</span>, <span style="color:#ae81ff">3</span>) 
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  co_code    : <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;d</span><span style="color:#ae81ff">\x01</span><span style="color:#e6db74">S</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">&#39;</span> 
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">2</span>           <span style="color:#ae81ff">0</span> LOAD_CONST               <span style="color:#ae81ff">1</span> (<span style="color:#ae81ff">3</span>)
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">2</span> RETURN_VALUE
+</span></span></code></pre></div><p>So what would happen if we modify the <code>co_consts</code> tuple, will this just return ur value instead ?
+The answer is yes, computers are dumb they just do what they&rsquo;re told to, so in this case it would load whatever value is at index 1 in <code>co_consts</code> and return.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>In [<span style="color:#ae81ff">9</span>]: injConsts <span style="color:#f92672">=</span> (<span style="color:#66d9ef">None</span>, <span style="color:#e6db74">&#34;wut happened?&#34;</span>)
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">10</span>]: code_obj <span style="color:#f92672">=</span> func<span style="color:#f92672">.</span>__code__
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">11</span>]: code_obj <span style="color:#f92672">=</span> code_obj<span style="color:#f92672">.</span>replace(co_consts<span style="color:#f92672">=</span>injConsts)
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">12</span>]: func<span style="color:#f92672">.</span>__code__ <span style="color:#f92672">=</span> code_obj
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">13</span>]: func()
+</span></span><span style="display:flex;"><span>Out[<span style="color:#ae81ff">14</span>]: <span style="color:#e6db74">&#39;wut happened?&#39;</span>
+</span></span></code></pre></div><p>Let&rsquo;s take it a step further and try to change the bytecode.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">add</span>(x, y):
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> x <span style="color:#f92672">+</span> y
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>add
+</span></span><span style="display:flex;"><span>  co_varnames: (<span style="color:#e6db74">&#39;x&#39;</span>, <span style="color:#e6db74">&#39;y&#39;</span>)
+</span></span><span style="display:flex;"><span>  co_names   : ()
+</span></span><span style="display:flex;"><span>  co_consts  : (<span style="color:#66d9ef">None</span>,) 
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  co_code    : <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;|</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">|</span><span style="color:#ae81ff">\x01\x17\x00</span><span style="color:#e6db74">S</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">&#39;</span> 
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>Source Line  m  operation<span style="color:#f92672">/</span>byte<span style="color:#f92672">-</span>code      operand (useful name<span style="color:#f92672">/</span>number)
+</span></span><span style="display:flex;"><span><span style="color:#f92672">---------------------------------------------------------------------</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">2</span>           <span style="color:#ae81ff">0</span> LOAD_FAST                <span style="color:#ae81ff">0</span> (x)
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">2</span> LOAD_FAST                <span style="color:#ae81ff">1</span> (y)
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">4</span> BINARY_ADD
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">6</span> RETURN_VALUE
+</span></span></code></pre></div><p>We will try to change the <code>BINARY_ADD</code> instruction to <code>BINARY_multiply</code>. To do this, firstly we need to convert
+the bytecode to int&rsquo;s so we can identify more easily each instruction:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>In [<span style="color:#ae81ff">16</span>]: code_obj <span style="color:#f92672">=</span> add<span style="color:#f92672">.</span>__code__
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">17</span>]: bytecode <span style="color:#f92672">=</span> [x <span style="color:#66d9ef">for</span> x <span style="color:#f92672">in</span> code_obj<span style="color:#f92672">.</span>co_code]
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">18</span>]: bytecode
+</span></span><span style="display:flex;"><span>Out[<span style="color:#ae81ff">18</span>]: [<span style="color:#ae81ff">124</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">124</span>, <span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">23</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">83</span>, <span style="color:#ae81ff">0</span>]
+</span></span></code></pre></div><p>We know that the offset of our target is 4, so we change it with the opcode for <code>BINARY_MULTIPLY</code>:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>In [<span style="color:#ae81ff">24</span>]: bytecode[<span style="color:#ae81ff">4</span>] <span style="color:#f92672">=</span> dis<span style="color:#f92672">.</span>opmap[<span style="color:#e6db74">&#39;BINARY_MULTIPLY&#39;</span>]
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">25</span>]: bytecode
+</span></span><span style="display:flex;"><span>Out[<span style="color:#ae81ff">25</span>]: [<span style="color:#ae81ff">124</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">124</span>, <span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">20</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">83</span>, <span style="color:#ae81ff">0</span>]
+</span></span></code></pre></div><p>Now we just need to replace the <code>co_code</code> attribute with our injected bytecode.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>In [<span style="color:#ae81ff">26</span>]: injCode <span style="color:#f92672">=</span> bytes(bytecode)
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">27</span>]: code_obj <span style="color:#f92672">=</span> code_obj<span style="color:#f92672">.</span>replace(co_code<span style="color:#f92672">=</span>injCode)
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">28</span>]: add<span style="color:#f92672">.</span>__code__ <span style="color:#f92672">=</span> code_obj
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">29</span>]: add(<span style="color:#ae81ff">3</span>, <span style="color:#ae81ff">4</span>)
+</span></span><span style="display:flex;"><span>Out[<span style="color:#ae81ff">29</span>]: <span style="color:#ae81ff">12</span>
+</span></span></code></pre></div><p>And voilà we modified the normal execution flow of the funcion.</p>
+<p>Out there in the real world this aproach is not the best, since we completely destroy the original functionality of the targeted bytecode. Therefore, software might brake which may raise some alarms. So a better way do to this is to execute our code at the beginning and after return to the normal execution of the function. For the purposes of this article I will keep it simple and just execute the <code>ls</code> command, however keep in mind that you can basically execute any python code as long as you modify the other attributes of the code object accordingly (e.g co_varnames, co_consts, etc)</p>
+<p>Consider our previous function <code>add</code>, but we know want to execute a system command before returning. I think the best way to visualize what we need to achieve is to look at the bytecode of our goal:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">injadd</span>(x, y):
+</span></span><span style="display:flex;"><span>	<span style="color:#f92672">import</span> os
+</span></span><span style="display:flex;"><span>	os<span style="color:#f92672">.</span>system(<span style="color:#e6db74">&#39;ls&#39;</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> x <span style="color:#f92672">+</span> y
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>injadd
+</span></span><span style="display:flex;"><span>  co_varnames: (<span style="color:#e6db74">&#39;x&#39;</span>, <span style="color:#e6db74">&#39;y&#39;</span>, <span style="color:#e6db74">&#39;os&#39;</span>)
+</span></span><span style="display:flex;"><span>  co_names   : (<span style="color:#e6db74">&#39;os&#39;</span>, <span style="color:#e6db74">&#39;system&#39;</span>)
+</span></span><span style="display:flex;"><span>  co_consts  : (<span style="color:#66d9ef">None</span>, <span style="color:#ae81ff">0</span>, <span style="color:#e6db74">&#39;ls&#39;</span>) 
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  co_code    : <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;d</span><span style="color:#ae81ff">\x01</span><span style="color:#e6db74">d</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">l</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">}</span><span style="color:#ae81ff">\x02</span><span style="color:#e6db74">|</span><span style="color:#ae81ff">\x02\xa0\x01</span><span style="color:#e6db74">d</span><span style="color:#ae81ff">\x02\xa1\x01\x01\x00</span><span style="color:#e6db74">|</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">|</span><span style="color:#ae81ff">\x01\x17\x00</span><span style="color:#e6db74">S</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">&#39;</span> 
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>Source Line  m  operation<span style="color:#f92672">/</span>byte<span style="color:#f92672">-</span>code      operand (useful name<span style="color:#f92672">/</span>number)
+</span></span><span style="display:flex;"><span><span style="color:#f92672">---------------------------------------------------------------------</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">2</span>           <span style="color:#ae81ff">0</span> LOAD_CONST               <span style="color:#ae81ff">1</span> (<span style="color:#ae81ff">0</span>)
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">2</span> LOAD_CONST               <span style="color:#ae81ff">0</span> (<span style="color:#66d9ef">None</span>)
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">4</span> IMPORT_NAME              <span style="color:#ae81ff">0</span> (os)
+</span></span><span style="display:flex;"><span>              <span style="color:#ae81ff">6</span> STORE_FAST               <span style="color:#ae81ff">2</span> (os)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">3</span>           <span style="color:#ae81ff">8</span> LOAD_FAST                <span style="color:#ae81ff">2</span> (os)
+</span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">10</span> LOAD_METHOD              <span style="color:#ae81ff">1</span> (system)
+</span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">12</span> LOAD_CONST               <span style="color:#ae81ff">2</span> (<span style="color:#e6db74">&#39;ls&#39;</span>)
+</span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">14</span> CALL_METHOD              <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">16</span> POP_TOP
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">4</span>          <span style="color:#ae81ff">18</span> LOAD_FAST                <span style="color:#ae81ff">0</span> (x)
+</span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">20</span> LOAD_FAST                <span style="color:#ae81ff">1</span> (y)
+</span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">22</span> BINARY_ADD
+</span></span><span style="display:flex;"><span>             <span style="color:#ae81ff">24</span> RETURN_VALUE
+</span></span></code></pre></div><p>We notice that the bytecode changed significantly, which was expected. Firstly, we notice that we need to change
+the all 3 variable tuples (co_varnames, co_names, co_consts):</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>In [<span style="color:#ae81ff">43</span>]: injvnames <span style="color:#f92672">=</span> (<span style="color:#e6db74">&#39;x&#39;</span>, <span style="color:#e6db74">&#39;y&#39;</span>, <span style="color:#e6db74">&#39;os&#39;</span>)
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">44</span>]: injnames <span style="color:#f92672">=</span> (<span style="color:#e6db74">&#39;os&#39;</span>, <span style="color:#e6db74">&#39;system&#39;</span>)
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">45</span>]: injconsts <span style="color:#f92672">=</span> (<span style="color:#66d9ef">None</span>, <span style="color:#ae81ff">0</span>, <span style="color:#e6db74">&#39;ls&#39;</span>)
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">47</span>]: add_code <span style="color:#f92672">=</span> add_code<span style="color:#f92672">.</span>replace(co_varnames<span style="color:#f92672">=</span>injvnames)
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">48</span>]: add_code <span style="color:#f92672">=</span> add_code<span style="color:#f92672">.</span>replace(co_names<span style="color:#f92672">=</span>injnames)
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">49</span>]: add_code <span style="color:#f92672">=</span> add_code<span style="color:#f92672">.</span>replace(co_consts<span style="color:#f92672">=</span>injconsts)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>add
+</span></span><span style="display:flex;"><span>  co_varnames: (<span style="color:#e6db74">&#39;x&#39;</span>, <span style="color:#e6db74">&#39;y&#39;</span>, <span style="color:#e6db74">&#39;os&#39;</span>)
+</span></span><span style="display:flex;"><span>  co_names   : (<span style="color:#e6db74">&#39;os&#39;</span>, <span style="color:#e6db74">&#39;system&#39;</span>)
+</span></span><span style="display:flex;"><span>  co_consts  : (<span style="color:#66d9ef">None</span>, <span style="color:#ae81ff">0</span>, <span style="color:#e6db74">&#39;whoami&#39;</span>) 
+</span></span></code></pre></div><p>That was pretty easy, now let&rsquo;s go and construct out injected bytecode and insert it before the function&rsquo;s bytecode</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#75715e"># inj_code = (</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x64&#34;,  LOAD_CONST    (0)</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x01&#34;,  1</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x64&#34;,  LOAD_CONST    (None)</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x00&#34;,  0</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x6c&#34;,  IMPORT_NAME   (os)</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x00&#34;,  0</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x7d&#34;,  STORE_FAST    (os)</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x02&#34;,  2</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x7c&#34;,  LOAD_FAST     (os)</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x02&#34;,  2</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\xa0&#34;,  LOAD_METHOD   (system)</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x01&#34;,  1</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x64&#34;,  LOAD_CONST    (ls)</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x02&#34;,  2</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\xa1&#34;,  CALL_METHOD</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x01&#34;,  1</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x01&#34;,  POP_TOP</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#         &#34;\x00&#34;,  POP_TOP</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># )</span>
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">53</span>]: inj_code <span style="color:#f92672">=</span> <span style="color:#e6db74">b</span><span style="color:#e6db74">&#34;</span><span style="color:#ae81ff">\x64\x01\x64\x00\x6c\x00\x7d\x02\x7c\x02\xa0\x01\x64\x02\xa1\x01\x01\x00</span><span style="color:#e6db74">&#34;</span>
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">55</span>]: print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;inj_code : </span><span style="color:#e6db74">{</span>bytes(inj_code)<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">56</span>]: print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;add_code : </span><span style="color:#e6db74">{</span>bytes(add<span style="color:#f92672">.</span>__code__<span style="color:#f92672">.</span>co_code)<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">57</span>]: print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;result   : </span><span style="color:#e6db74">{</span>bytes(inj_code <span style="color:#f92672">+</span> add<span style="color:#f92672">.</span>__code__<span style="color:#f92672">.</span>co_code)<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>inj_code : <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;d</span><span style="color:#ae81ff">\x01</span><span style="color:#e6db74">d</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">l</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">}</span><span style="color:#ae81ff">\x02</span><span style="color:#e6db74">|</span><span style="color:#ae81ff">\x02\xa0\x01</span><span style="color:#e6db74">d</span><span style="color:#ae81ff">\x02\xa1\x01\x01\x00</span><span style="color:#e6db74">&#39;</span>
+</span></span><span style="display:flex;"><span>add_code : <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;|</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">|</span><span style="color:#ae81ff">\x01\x14\x00</span><span style="color:#e6db74">S</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">&#39;</span>
+</span></span><span style="display:flex;"><span>result   : <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;d</span><span style="color:#ae81ff">\x01</span><span style="color:#e6db74">d</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">l</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">}</span><span style="color:#ae81ff">\x02</span><span style="color:#e6db74">|</span><span style="color:#ae81ff">\x02\xa0\x01</span><span style="color:#e6db74">d</span><span style="color:#ae81ff">\x02\xa1\x01\x01\x00</span><span style="color:#e6db74">|</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">|</span><span style="color:#ae81ff">\x01\x14\x00</span><span style="color:#e6db74">S</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">&#39;</span>
+</span></span></code></pre></div><p>All that&rsquo;s left to do is to change the <code>co_code</code> attribute and execute the function.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>In [<span style="color:#ae81ff">57</span>]: add_code <span style="color:#f92672">=</span> add_code<span style="color:#f92672">.</span>replace(co_code<span style="color:#f92672">=</span>inj_code <span style="color:#f92672">+</span> add_code<span style="color:#f92672">.</span>co_code)
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">58</span>]: add<span style="color:#f92672">.</span>__code__ <span style="color:#f92672">=</span> add_code
+</span></span><span style="display:flex;"><span>In [<span style="color:#ae81ff">59</span>]: add(<span style="color:#ae81ff">3</span>,<span style="color:#ae81ff">4</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>disas<span style="color:#f92672">.</span>py  inject<span style="color:#f92672">.</span>py  main_func<span style="color:#f92672">.</span>py  naked<span style="color:#f92672">.</span>py  notes  __pycache__
+</span></span><span style="display:flex;"><span>Out[<span style="color:#ae81ff">59</span>]: <span style="color:#ae81ff">12</span>
+</span></span></code></pre></div><p>Victory !! We achieved code execution.</p>
+<p>You can imagine how you could use this as a stealthy way to deploy stealthy backdoors, exfiltrate data, etc.
+The nice thing about this aproach is that your code gets executed by the current running process, without spawning a suspicios subprocess that may raise some alerts. I haven&rsquo;t tested this yet, but I think that this kind of attack
+might be more effective if a deserialization vulnerability is in place.</p>
+<p>There are some things to note though:</p>
+<ol>
+<li>This example uses a simple add function. Hence, the interaction with different attributes are minimal <em>(e.g co_names was empty in our example)</em>. Since there weren&rsquo;t many interactions with some of the variable tuples, we could easily add our own and easily change the bytecode to load from those specific indexe&rsquo;s
+<!-- raw HTML omitted --></li>
+<li>More complex functions might be harder to inject because you need to set the position of your injected variables in such a way that is compatible with the bytecode already in place. Consequently, it might not be as easy as inserting your injected code at the start, instead you will also need to modify some of the original bytecode instructions accordingly.
+<!-- raw HTML omitted --></li>
+<li>Another thing that I noticed during my explorations is that function parameters play a big role in choosing how you position your injected variables.</li>
+</ol>
+<p>Currently, I&rsquo;m trying to develop a way to automatically inject any piece of bytecode in any function. However, I
+ran into some problems due to the points I made above. So if there are some python guru&rsquo;s reading this, please
+reach out to me at <code>vlaghew@protonmail.com</code> and we might develop something beautiful. Thanks !</p>
+<h1 id="conclusion">Conclusion<a href="#conclusion" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
+<p>Since I just realized that this article got pretty lengthy I will stop here even if I wanted to aproach some other subjects such as: digging into the CPython Virtual Machine, Building an interpreter, etc. However, I might do that in separate articles. Until then, make sure to check out the awesome resources below which made the creation of this post possible and enlightened me about the unknown world of python vm. There are some great reads made by amazing people who share their knowledge, craft and experience.</p>
+<p>As a final note, I encourage you to go and play around with the new tricks you&rsquo;ve learned and maybe you&rsquo;ll find something interesting that can be used in your advantage. Learn by doing and don&rsquo;t forget to have fun !</p>
+<p>Vlaghe out.</p>
+<h2 id="resources">Resources<a href="#resources" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<ul>
+<li><a href="https://ruslanspivak.com/lsbasi-part1/">https://ruslanspivak.com/lsbasi-part1/</a></li>
+<li><a href="http://www.bravegnu.org/blog/python-byte-code-hacks.html">http://www.bravegnu.org/blog/python-byte-code-hacks.html</a></li>
+<li><a href="https://0xec.blogspot.com/2017/03/hacking-cpython-virtual-machine-to.html">https://0xec.blogspot.com/2017/03/hacking-cpython-virtual-machine-to.html</a></li>
+<li><a href="https://tenthousandmeters.com/blog/python-behind-the-scenes-4-how-python-bytecode-is-executed/">https://tenthousandmeters.com/blog/python-behind-the-scenes-4-how-python-bytecode-is-executed/</a></li>
+<li><a href="https://tenthousandmeters.com/blog/python-behind-the-scenes-1-how-the-cpython-vm-works/">https://tenthousandmeters.com/blog/python-behind-the-scenes-1-how-the-cpython-vm-works/</a></li>
+<li><a href="https://github.com/python/cpython">https://github.com/python/cpython</a></li>
+<li><a href="https://www.ics.uci.edu/~brgallar/week9_3.html">https://www.ics.uci.edu/~brgallar/week9_3.html</a></li>
+<li><a href="https://files.eric.ed.gov/fulltext/EJ1164711.pdf">https://files.eric.ed.gov/fulltext/EJ1164711.pdf</a></li>
+<li><a href="https://people.cs.kuleuven.be/~stijn.volckaert/papers/2018_DIMVA_Interpreters.pdf">https://people.cs.kuleuven.be/~stijn.volckaert/papers/2018_DIMVA_Interpreters.pdf</a></li>
+<li><a href="https://www.youtube.com/watch?v=cSSpnq362Bk">James Bennett - A Bit about Bytes: Understanding Python Bytecode - PyCon 2018</a></li>
+<li><a href="https://www.youtube.com/watch?v=45BhX5wSeVs">CPython - Bytecode and Virtual Machine - Stephane Wirtel</a></li>
+</ul>
+
+      </div></div>
+
+  
+  
+<div class="pagination">
+    <div class="pagination__title">
+        <span class="pagination__title-h">Read other posts</span>
+        <hr />
+    </div>
+    <div class="pagination__buttons">
+        
+        
+        <span class="button next">
+            <a href="https://vlaghe.github.io/posts/elf_inject/">
+                <span class="button__text">Injecting ELF files</span>
+                <span class="button__icon">→</span>
+            </a>
+        </span>
+        
+    </div>
+</div>
+
+  
+
+  
+  
+
+  
+</div>
+
+  </div>
+
+  
+    <footer class="footer">
+  <div class="footer__inner">
+    
+      <div class="copyright">
+        <span>© 2022 Powered by <a href="http://gohugo.io">Hugo</a></span>
+    
+        <span>:: Theme made by <a href="https://twitter.com/panr">panr</a></span>
+      </div>
+  </div>
+</footer>
+
+<script src="https://vlaghe.github.io/assets/main.js"></script>
+<script src="https://vlaghe.github.io/assets/prism.js"></script>
+
+
+
+
+
+
+
+  
+</div>
+
+</body>
+</html>

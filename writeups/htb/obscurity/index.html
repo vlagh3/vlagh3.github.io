@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  
+    <title>Obscurity Hackthebox :: Vlaghe&#39;s Blog</title>
+  
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Enumeration I started with a simple nmap to get a basic overview:
+nmap -sC -sV -oA nmap/obscurity 10.10.10.168 As you can see ports 8080 (http), 22(ssh) and 9000 are open.
+Website Once on the web page we are prompted with this:
+If you scroll a little bit more we find something peculiar:
+So we need to find the SuperSecureServer.py file in order to get the backend code of this web app." />
+<meta name="keywords" content="" />
+<meta name="robots" content="noodp" />
+<link rel="canonical" href="https://vlaghe.github.io/writeups/htb/obscurity/" />
+
+
+
+
+<link rel="stylesheet" href="https://vlaghe.github.io/assets/style.css">
+
+  <link rel="stylesheet" href="https://vlaghe.github.io/assets/green.css">
+
+
+
+
+
+
+<link rel="apple-touch-icon" href="https://vlaghe.github.io/img/apple-touch-icon-192x192.png">
+
+  <link rel="shortcut icon" href="https://vlaghe.github.io/img/favicon/green.png">
+
+
+
+<meta name="twitter:card" content="summary" />
+
+  
+    <meta name="twitter:site" content="" />
+  
+    <meta name="twitter:creator" content="" />
+
+
+
+<meta property="og:locale" content="en" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="Obscurity Hackthebox">
+<meta property="og:description" content="Enumeration I started with a simple nmap to get a basic overview:
+nmap -sC -sV -oA nmap/obscurity 10.10.10.168 As you can see ports 8080 (http), 22(ssh) and 9000 are open.
+Website Once on the web page we are prompted with this:
+If you scroll a little bit more we find something peculiar:
+So we need to find the SuperSecureServer.py file in order to get the backend code of this web app." />
+<meta property="og:url" content="https://vlaghe.github.io/writeups/htb/obscurity/" />
+<meta property="og:site_name" content="Vlaghe&#39;s Blog" />
+
+  
+    <meta property="og:image" content="https://vlaghe.github.io/img/favicon/green.png">
+  
+
+<meta property="og:image:width" content="2048">
+<meta property="og:image:height" content="1024">
+
+
+  <meta property="article:published_time" content="2021-03-10 12:48:05 &#43;0300 &#43;0300" />
+
+
+
+
+
+
+
+
+
+
+
+
+</head>
+<body class="green">
+
+
+<div class="container center headings--one-size">
+
+  <header class="header">
+  <div class="header__inner">
+    <div class="header__logo">
+      <a href="/">
+  <div class="logo">
+    Blog
+  </div>
+</a>
+
+    </div>
+    
+      <div class="menu-trigger">menu</div>
+    
+  </div>
+  
+    <nav class="menu">
+  <ul class="menu__inner menu__inner--desktop">
+    
+      
+        
+          <li><a href="/notes">Notes</a></li>
+        
+      
+        
+          <li><a href="/writeups">Writeups</a></li>
+        
+      
+      
+    
+
+    
+  </ul>
+
+  <ul class="menu__inner menu__inner--mobile">
+    
+      
+        <li><a href="/notes">Notes</a></li>
+      
+    
+      
+        <li><a href="/writeups">Writeups</a></li>
+      
+    
+    
+  </ul>
+</nav>
+
+  
+</header>
+
+
+  <div class="content">
+    
+<div class="post">
+  <h1 class="post-title">
+    <a href="https://vlaghe.github.io/writeups/htb/obscurity/">Obscurity Hackthebox</a></h1>
+  <div class="post-meta">
+    
+      <span class="post-date">
+        2021-03-10
+        
+      </span>
+    
+    
+    
+  </div>
+
+  
+  
+
+
+  
+
+  <div class="post-content"><div>
+        <p><img src="https://i.imgur.com/OcukgEq.png" alt=""></p>
+<h1 id="enumeration">Enumeration<a href="#enumeration" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
+<p>I started with a simple nmap to get a basic overview:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>nmap -sC -sV -oA nmap/obscurity 10.10.10.168
+</span></span></code></pre></div><p><img src="https://i.imgur.com/UtwqgOP.png" alt=""></p>
+<p>As you can see ports <code>8080</code> (<strong>http</strong>), <code>22</code>(<strong>ssh</strong>) and <code>9000</code> are open.</p>
+<h1 id="website">Website<a href="#website" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
+<p>Once on the web page we are prompted with this:</p>
+<p><img src="https://i.imgur.com/DyVcVsf.png" alt=""></p>
+<p>If you scroll a little bit more we find something peculiar:</p>
+<p><img src="https://i.imgur.com/nx5y6OA.png" alt=""></p>
+<p>So we need to find the <code>SuperSecureServer.py</code> file in order to get the backend code of this web app. For that I used <a href="https://github.com/ffuf/ffuf">ffuf</a>:</p>
+<p><img src="https://i.imgur.com/SZfkC5u.png" alt=""></p>
+<p>After letting <code>ffuf</code> to do it&rsquo;s job for a while, we are prompted with the desired folder: <code>develop</code>. So, the directory was not so secret afterall because we can access the file at <code>/develop/SuperSecureServer.py</code>:</p>
+<p><img src="https://i.imgur.com/2PDFkRP.png" alt=""></p>
+<p>Well, now it&rsquo;s time to look for a <strong>RCE</strong> or something that we can exploit. This task is not so complicated since the following line looks like this:</p>
+<p><img src="https://i.imgur.com/vhBYHsX.png" alt=""></p>
+<p>So we can execute code if we format correctly the <code>path</code> variable. Therefore, I came up with this little python script:</p>
+<p><img src="https://i.imgur.com/Mxg9BRw.png" alt=""></p>
+<p>When the server processes this, the <code>info</code> variable will look like this:</p>
+<blockquote>
+<p>output = &lsquo;Document&rsquo;
+&lt;reverse_shell&gt;
+ape=''</p>
+</blockquote>
+<p>This is valid python code. As a result, we get back a shell:</p>
+<p><img src="https://i.imgur.com/QootNLC.png" alt=""></p>
+<hr>
+<h1 id="user">User<a href="#user" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
+<p>If we take a look at the folder where the user flag is we find these interesting files:
+<img src="https://i.imgur.com/ECmODcN.png" alt=""></p>
+<p>We have just 4 files we care about:</p>
+<ol>
+<li><code>SuperSecureCrypt.py</code> - Python script to encrypt files</li>
+<li><code>check.txt</code> - Clear text of <code>out.txt</code></li>
+<li><code>out.txt</code> - Ciphertext of clear text <code>check.txt</code></li>
+<li><code>passwordreminder.txt</code> - Encrypted password of the robert user</li>
+</ol>
+<p>By taking a look at how the encryption/decryption algorithm works, we find a funny thing. That is, we can obtain the password used in an encrypted text if we know the clear text:</p>
+<p><img src="https://i.imgur.com/M03zheF.png" alt=""></p>
+<p>Thus, in order to find the password used to encrypt the <code>out.txt</code> file we just need to execute the following:</p>
+<p><img src="https://i.imgur.com/rajzLAI.png" alt=""></p>
+<p>The password used to encrypt the text was: <strong>alexandrovich</strong></p>
+<p>Now that we know the password, we can decrypt the <code>passwordreminder.txt</code></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>python3 SuperSecretCrypt.py -k <span style="color:#e6db74">&#34;alexandrovich&#34;</span> -i passwordreminder.txt -o /tmp/pass -d
+</span></span></code></pre></div><p>The password for robert being <strong>SecThruObsFTW</strong>. Login with <em>SSH</em> and cat <code>user.txt</code>
+<img src="https://i.imgur.com/hvTjk0v.png" alt=""></p>
+<hr>
+<h1 id="root">Root<a href="#root" class="hanchor" ariaLabel="Anchor">&#8983;</a> </h1>
+<p>Now that we have access to the robert user, we can look at a file we ommited on our journey of getting the user flag. That file is <code>BetterSSH.py</code></p>
+<p><img src="https://i.imgur.com/wsIffJq.png" alt=""></p>
+<p>The first part of the script is just authenticating the user we provide with the password. What is more interesting is the second part:</p>
+<p><img src="https://i.imgur.com/DmMQfyp.png" alt=""></p>
+<p>The 4th line is of interest because it executes commands with <code>sudo -u</code> and our input, so we can do something like: <code>sudo -u robert -u root whoami</code>, which in theory should display <strong>root</strong>.</p>
+<p>First I tried to execute the script with sudo:</p>
+<p><img src="https://i.imgur.com/Grny92t.png" alt=""></p>
+<p>Ok.. so we are not allowed to run the script. At this point I decided to run <a href="https://github.com/carlospolop/privilege-escalation-awesome-scripts-suite/tree/master/linPEAS">linpeas</a>, which gave me this:</p>
+<p><img src="https://i.imgur.com/rHySzW3.png" alt=""></p>
+<p>Now it all makes sense we need to execute:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>sudo /usr/bin/python3 /home/robert/BetterSSH/BetterSSH.py
+</span></span></code></pre></div><p>And then input <code>-u root cat /root/root.txt</code></p>
+<p><img src="https://i.imgur.com/kizLVnn.png" alt=""></p>
+
+      </div></div>
+
+  
+
+  
+  
+
+  
+</div>
+
+  </div>
+
+  
+    <footer class="footer">
+  <div class="footer__inner">
+    
+      <div class="copyright">
+        <span>© 2022 Powered by <a href="http://gohugo.io">Hugo</a></span>
+    
+        <span>:: Theme made by <a href="https://twitter.com/panr">panr</a></span>
+      </div>
+  </div>
+</footer>
+
+<script src="https://vlaghe.github.io/assets/main.js"></script>
+<script src="https://vlaghe.github.io/assets/prism.js"></script>
+
+
+
+
+
+
+
+  
+</div>
+
+</body>
+</html>
